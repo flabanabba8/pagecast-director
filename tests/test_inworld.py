@@ -97,7 +97,7 @@ class InworldTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg required')
     def test_book_cache_and_paid_retry_guard(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(inworld, 'credential', return_value='Zml4dHVyZTpmaXh0dXJl'), patch.object(inworld.http.client, 'HTTPSConnection', Connection):
-            books = Books(tmp); identifier = books.import_book(text='Hello there.')['book_id']
+            books = Books(tmp); imported = books.import_book(text='Hello there.'); identifier = imported['book_id']
             books.set_voice(identifier, 'Narrator', engine='inworld')
             Connection.invalid_audio = True
             self.assertEqual(books.render(identifier)['state'], 'failed')
@@ -118,6 +118,7 @@ class InworldTests(unittest.TestCase):
             self.assertEqual(books.usage(identifier)['reported_characters'], 24)
             verify_cache(books.plan(identifier)[1][0]['audio_path'])
             timeline = books.timeline(identifier, include_text=True)
+            self.assertEqual(timeline['source_sha256'], imported['source_hash'])
             self.assertEqual(timeline['passages'][0]['text'], 'Hello there.')
             self.assertEqual(len(timeline['passages']), 1)
             self.assertGreater(timeline['passages'][0]['end_seconds'], 0)
