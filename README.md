@@ -62,9 +62,14 @@ Sources: [synthesis API](https://docs.inworld.ai/api-reference/ttsAPI/texttospee
 
 ## Requirements
 
-Linux, Python3.11+, FFmpeg/ffprobe, and Flite for the default offline voices.
-mpv is optional for audio-only previews on the Hermes host. No Python package
-dependencies. The plugin installs no software and downloads no models.
+Python 3.11+, FFmpeg/ffprobe, and Flite for the default offline voices. Synthetic
+Linux and Windows checks cover import, editing/casting, mocked Inworld rendering,
+WAV/M4B export and locking. Flite was not available on the tested Windows
+machine; explicitly choose Inworld or a configured Higgs server if it is not
+installed. Windows ACLs, live Windows providers and preview playback remain
+unverified. mpv is optional for audio-only previews on the Hermes host. No
+Python package dependencies. The plugin installs no software and downloads no
+models.
 
 For neural speech, configure the already-running loopback Higgs service in plugin
 settings. Set the served model ID and revision. Each speaker can use a local

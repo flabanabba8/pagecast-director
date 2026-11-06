@@ -42,8 +42,15 @@ class ImportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
             root = Path(tmp); outside = root/'outside.db'; outside.write_text('fixture')
             (root/'books.db').symlink_to(outside)
-            with self.assertRaises(OSError): Books(root)
+            with self.assertRaises((OSError, ValueError)): Books(root)
             self.assertEqual(outside.read_text(), 'fixture')
+
+    def test_book_lock_rejects_a_second_owner(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            books = Books(tmp); ident = books.import_book(text='Fictional fixture.')['book_id']
+            with books.lock(ident):
+                with self.assertRaisesRegex(RuntimeError, 'busy'):
+                    with books.lock(ident): pass
 
     def test_quote_offsets_apostrophes_and_scene_breaks(self):
         paragraphs = ["Don't lose the map.", '“We won’t,” said Mina.', '***']

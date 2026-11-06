@@ -1,7 +1,6 @@
 """Editable passage/cast state and content-addressed render bookkeeping."""
 from contextlib import contextmanager
 import base64
-import fcntl
 import hashlib
 import json
 import math
@@ -20,6 +19,7 @@ import wave
 from .higgs import synthesize
 from .reference_paths import resolve_reference
 from . import inworld
+from . import locking
 from .process_env import process_env
 from .importers import MAX_TEXT, import_file, segment
 
@@ -82,6 +82,7 @@ class Books:
         self.settings = settings or {}
         self.runtime_hashes = {}
         self.db_path = self.root / 'books.db'
+        if self.db_path.is_symlink(): raise ValueError('Symlinked book database is unsupported')
         fd = os.open(self.db_path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0), 0o600)
         try:
             if not stat.S_ISREG(os.fstat(fd).st_mode): raise ValueError('Book database must be a regular file')
@@ -113,9 +114,7 @@ class Books:
 
     @contextmanager
     def lock(self, book_id, name='edit'):
-        with (self.folder(book_id) / (name + '.lock')).open('a') as handle:
-            try: fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError: raise RuntimeError('This book is busy; wait for the current operation') from None
+        with locking.exclusive_lock(self.folder(book_id) / (name + '.lock'), 'This book is busy; wait for the current operation'):
             yield
 
     def import_book(self, title=None, text=None, source_path=None, allow_profile_books=False):
@@ -338,7 +337,7 @@ class Books:
                                     'acceptance': 'nonempty normalized WAV, bounded duration; semantic/listening review separate'}
                         raw.with_suffix('.json').write_text(json.dumps(contract, indent=2))
                         if voice['engine'] == 'flite':
-                            script = raw.with_suffix('.txt'); script.write_text(passage['text']); script.chmod(0o600)
+                            script = raw.with_suffix('.txt'); script.write_text(passage['text'], encoding='utf-8'); script.chmod(0o600)
                             try: run(['flite', '-voice', voice['voice'], '-f', str(script), '-o', str(raw)], timeout=30)
                             finally: script.unlink(missing_ok=True)
                         elif voice['engine'] == 'higgs':
@@ -389,7 +388,7 @@ class Books:
         if not shutil.which('mpv'): raise ValueError('Install mpv to preview on the Hermes host')
         process = subprocess.Popen(['mpv', '--no-config', '--load-scripts=no', '--ytdl=no', '--no-video', '--audio-display=no',
             '--terminal=no', '--input-terminal=no', '--force-media-title=' + passage['speaker'], str(path)],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, env=process_env())
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=os.name != 'nt', env=process_env())
         threading.Thread(target=process.wait, daemon=True).start()
         return {'state': 'launched', 'passage_id': passage_id, 'seconds': duration,
                 'notice': 'Audio preview launched on the Hermes host. Listening quality is not automatically verified.'}
@@ -467,12 +466,12 @@ class Books:
                     inspect_wav(temporary)
                 else:
                     if '\n' in str(folder): raise ValueError('Newlines in the storage directory are unsupported by audio export')
-                    manifest.write_text(''.join("file '" + p['audio_path'].replace("'", "'\\''") + "'\n" for p in passages))
+                    manifest.write_text(''.join("file '" + Path(p['audio_path']).as_posix().replace("'", "'\\''") + "'\n" for p in passages), encoding='utf-8', newline='\n')
                     def escape(text): return ''.join('\\' + c if c in '\\=;#\n' else c for c in text)
                     meta = ';FFMETADATA1\ntitle=' + escape(book['title']) + '\n'
                     for chapter in chapter_marks:
                         meta += f'[CHAPTER]\nTIMEBASE=1/1000\nSTART={round(chapter["start"]*1000)}\nEND={round(chapter["end"]*1000)}\ntitle={escape(chapter["title"])}\n'
-                    metadata.write_text(meta)
+                    metadata.write_text(meta, encoding='utf-8', newline='\n')
                     run(['ffmpeg', '-v', 'error', '-nostdin', '-n', '-f', 'concat', '-safe', '0', '-i', str(manifest), '-i', str(metadata),
                          '-map', '0:a:0', '-map_metadata', '1', '-map_chapters', '1', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', str(temporary)], timeout=300)
                     run(['ffmpeg', '-v', 'error', '-xerror', '-nostdin', '-i', str(temporary), '-f', 'null', '-'], timeout=180)

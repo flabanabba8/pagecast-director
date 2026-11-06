@@ -5,11 +5,17 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 ## Passed
 
 - The database is owner-only before SQLite opens it, including with a permissive
-  umask, and a symlinked database is rejected. Twenty-seven Python tests and
+  umask, and a symlinked database is rejected. Twenty-eight Python tests and
   Hermes validation passed; synthetic PageCast restore and podcast-to-video
   workflows also passed after this change. No new hosted voice request occurred.
-- Native Windows Python 3.14 confirmed that the plugin cannot import without
-  POSIX `fcntl`; Windows remains unsupported. No Windows speech was generated.
+- An initial Windows import failed because POSIX `fcntl` was unavailable. After
+  adding Windows locks and export-path handling, native Python 3.14 with FFmpeg
+  imported a fictional book, selected Inworld, rendered a mocked silent
+  response, reused its cache, exported WAV and M4B, and refused a competing
+  process while the book lock was held. A separate mocked PageCast → Podcast
+  Studio → YouTube Video Studio pipeline passed with one joined audio track.
+  No provider request or playback occurred; Windows ACLs, real providers,
+  Flite availability, preview playback and perceptual quality remain unverified.
 - EPUB spine order, escaped/unescaped filename spaces, excluded script/style text,
   archive traversal rejection, quote/source offsets, apostrophes and scene breaks.
 - Real local Flite synthesis with three voices. A one-passage batch resumed using
@@ -49,7 +55,7 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
   M4B. Voice similarity and listening quality were not judged. No model weights
   or reference clips are bundled.
 - Actual Hermes Desktop visual review, human voice-quality review, a full-length
-  audiobook, Windows support and a public demo remain unverified.
+  audiobook, broader Windows support and a public demo remain unverified.
 - UTF-8 text-first TXT/EPUB only; generic chapter names follow spine order. Complex
   layout, DRM, scanned PDF/OCR and series-wide cast sharing are outside this version.
 - Public source/history/artifact audit, repository/catalog PR, X video and contest
