@@ -1,0 +1,26 @@
+name: pagecast-director
+version: "0.1.0"
+description: "Editable cast narration with locked voices, source passage IDs, resumable synthesis and selective regeneration."
+author: "PageCast Director contributors"
+license: GPL-3.0-or-later
+requires_hermes: ">=0.22.0"
+provides_tools:
+  - pagecast_import
+  - pagecast_books
+  - pagecast_book
+  - pagecast_assign
+  - pagecast_voice
+  - pagecast_edit
+  - pagecast_render
+  - pagecast_cancel
+  - pagecast_preview
+  - pagecast_retry
+  - pagecast_export
+  - pagecast_usage
+  - pagecast_inworld_voices
+config_schema:
+  inworld_api_key: {type: secret, env: INWORLD_API_KEY, required: false, label: "Inworld API credential", description: "Complete Base64 credential copied from Inworld Portal. Stored by Hermes, never in book data."}
+  inworld_model: {type: str, default: "inworld-tts-2", choices: [inworld-tts-2, inworld-tts-2-flash], description: "Hosted Inworld speech model; synthesis sends text/voice IDs to Inworld and consumes your account credits."}
+  higgs_url: {type: str, default: "http://localhost:8000", description: "Already-running local Higgs TTS3 server origin."}
+  higgs_model: {type: str, default: "bosonai/higgs-tts-3-4b", description: "Served local model identifier."}
+  higgs_revision: {type: str, default: "", description: "Model revision used in audio cache identity; update when changing weights."}
