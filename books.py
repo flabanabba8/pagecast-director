@@ -82,6 +82,12 @@ class Books:
         self.settings = settings or {}
         self.runtime_hashes = {}
         self.db_path = self.root / 'books.db'
+        fd = os.open(self.db_path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0), 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode): raise ValueError('Book database must be a regular file')
+            os.fchmod(fd, 0o600)
+        finally:
+            os.close(fd)
         with self.db() as db:
             db.executescript('''
               CREATE TABLE IF NOT EXISTS books(id TEXT PRIMARY KEY,title TEXT NOT NULL,revision INTEGER NOT NULL,source_hash TEXT NOT NULL,created REAL NOT NULL);
@@ -91,7 +97,6 @@ class Books:
               CREATE TABLE IF NOT EXISTS renders(book TEXT PRIMARY KEY,state TEXT NOT NULL,done INTEGER NOT NULL,total INTEGER NOT NULL,error TEXT,updated REAL NOT NULL);
               CREATE TABLE IF NOT EXISTS paid_attempts(id TEXT PRIMARY KEY,book TEXT NOT NULL,passage INTEGER NOT NULL,signature TEXT NOT NULL,status TEXT NOT NULL,requested_units INTEGER NOT NULL,reported_units INTEGER,model TEXT NOT NULL,http_status INTEGER,retry_allowed INTEGER NOT NULL DEFAULT 0,created REAL NOT NULL);
             ''')
-        self.db_path.chmod(0o600)
 
     @contextmanager
     def db(self):

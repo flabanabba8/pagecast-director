@@ -81,6 +81,9 @@ separate license. See [Higgs model/license](https://huggingface.co/bosonai/higgs
 - Audio and its hash receipt are installed together by an atomic directory rename.
   Complete staging entries for the same revision are recovered without another
   synthesis request after an interrupted installation.
+- The Linux book database is opened with owner-only permissions before SQLite
+  initialization; a symlinked database is rejected. Existing regular databases
+  have their permissions restricted as well.
 - Every batch is limited to1–100 newly generated passages. Completed passages
   survive interruption. Cancellation is checked between bounded speech calls.
 - Editing the cast or text during synthesis stops that render as stale, preserving

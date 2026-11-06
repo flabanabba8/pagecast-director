@@ -21,6 +21,30 @@ TEXT = 'The observatory lights flickered.\n“Did you save the coordinates?”\n
 
 
 class ImportTests(unittest.TestCase):
+    def test_database_is_private_before_sqlite_opens_it(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            original = package.books.sqlite3.connect
+            modes = []
+            def connect(path, *args, **kwargs):
+                modes.append(Path(path).stat().st_mode & 0o777)
+                return original(path, *args, **kwargs)
+            previous = os.umask(0)
+            try:
+                with patch.object(package.books.sqlite3, 'connect', side_effect=connect):
+                    books = Books(tmp)
+                    books.import_book(text='Original private fixture.')
+                self.assertTrue(modes)
+                self.assertTrue(all(mode == 0o600 for mode in modes))
+            finally:
+                os.umask(previous)
+
+    def test_symlink_database_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            root = Path(tmp); outside = root/'outside.db'; outside.write_text('fixture')
+            (root/'books.db').symlink_to(outside)
+            with self.assertRaises(OSError): Books(root)
+            self.assertEqual(outside.read_text(), 'fixture')
+
     def test_quote_offsets_apostrophes_and_scene_breaks(self):
         paragraphs = ["Don't lose the map.", '“We won’t,” said Mina.', '***']
         units = segment([{'title': 'One', 'paragraphs': paragraphs}])

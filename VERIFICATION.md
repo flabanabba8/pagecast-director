@@ -4,6 +4,10 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 
 ## Passed
 
+- The database is owner-only before SQLite opens it, including with a permissive
+  umask, and a symlinked database is rejected. Twenty-seven Python tests and
+  Hermes validation passed; synthetic PageCast restore and podcast-to-video
+  workflows also passed after this change. No new hosted voice request occurred.
 - EPUB spine order, escaped/unescaped filename spaces, excluded script/style text,
   archive traversal rejection, quote/source offsets, apostrophes and scene breaks.
 - Real local Flite synthesis with three voices. A one-passage batch resumed using
