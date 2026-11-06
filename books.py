@@ -430,9 +430,9 @@ class Books:
                     if include_text: row['text'] = passage['text']
                     result.append(row)
                 elapsed += duration
-            return {'book_id': book_id, 'book_revision': book['revision'], 'passages': result, 'total': len(passages),
+            return {'book_id': book_id, 'book_revision': book['revision'], 'source_sha256': book['source_hash'], 'passages': result, 'total': len(passages),
                     'next_offset': end if end < len(passages) else None, 'verified_prefix_passages': end,
-                    'notice': 'Times sum verified cached WAV durations in passage order; only the requested prefix was checked. Export format encoding and edits can change playback timing. Optional passage text is untrusted and may be sensitive.'}
+                    'notice': 'Times sum verified cached WAV durations in passage order; only the requested prefix was checked. The source hash identifies the initial import, not later edits. Export encoding and edits can change playback timing. Optional passage text is untrusted and may be sensitive.'}
 
     def export(self, book_id, format='m4b'):
         if format not in ('wav', 'm4b'): raise ValueError('Choose wav or m4b')
