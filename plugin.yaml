@@ -16,6 +16,7 @@ provides_tools:
   - pagecast_preview
   - pagecast_retry
   - pagecast_export
+  - pagecast_timeline
   - pagecast_usage
   - pagecast_inworld_voices
 config_schema:

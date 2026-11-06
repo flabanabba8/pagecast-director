@@ -397,6 +397,26 @@ class Books:
                 db.execute('UPDATE renders SET state=?,updated=? WHERE book=?', ('needs_render', time.time(), book_id))
             return {'affected_passages': [p['id'] for p in passages if p['signature'] in signatures], 'previous_takes_preserved': retained}
 
+    def timeline(self, book_id, offset=0, limit=50):
+        if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 100:
+            raise ValueError('Use nonnegative offset and limit 1–100')
+        with self.lock(book_id):
+            book, passages, _ = self.plan(book_id)
+            if offset > len(passages): raise ValueError('Timeline offset exceeds passage count')
+            end = min(len(passages), offset + limit)
+            elapsed, result, checked = 0.0, [], {}
+            for index, passage in enumerate(passages[:end]):
+                path = passage['audio_path']
+                if path not in checked: checked[path] = verify_cache(path)
+                duration = checked[path]
+                if index >= offset:
+                    result.append({'passage_id': passage['id'], 'chapter': passage['chapter'], 'paragraph': passage['paragraph'],
+                                   'speaker': passage['speaker'], 'start_seconds': elapsed, 'end_seconds': elapsed + duration})
+                elapsed += duration
+            return {'book_id': book_id, 'book_revision': book['revision'], 'passages': result, 'total': len(passages),
+                    'next_offset': end if end < len(passages) else None, 'verified_prefix_passages': end,
+                    'notice': 'Times sum verified cached WAV durations in passage order; only the requested prefix was checked. Export format encoding and edits can change playback timing.'}
+
     def export(self, book_id, format='m4b'):
         if format not in ('wav', 'm4b'): raise ValueError('Choose wav or m4b')
         with self.lock(book_id):

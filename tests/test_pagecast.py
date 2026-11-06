@@ -80,8 +80,15 @@ class RenderTests(unittest.TestCase):
             first = books.render(book_id, max_segments=1)
             self.assertEqual(first['state'], 'partial'); self.assertEqual(first['generated'], 1)
             with self.assertRaises(ValueError): books.export(book_id)
+            with self.assertRaises(ValueError): books.timeline(book_id, offset=0, limit=2)
             complete = books.render(book_id)
             self.assertEqual(complete['state'], 'complete'); self.assertEqual(complete['generated'], 2); self.assertEqual(complete['reused'], 1)
+            first_page = books.timeline(book_id, offset=0, limit=1)
+            second_page = books.timeline(book_id, offset=1, limit=2)
+            self.assertEqual(first_page['next_offset'], 1)
+            self.assertAlmostEqual(first_page['passages'][0]['end_seconds'], second_page['passages'][0]['start_seconds'])
+            self.assertEqual(second_page['verified_prefix_passages'], 3)
+            self.assertIsNone(second_page['next_offset'])
             _, before, _ = books.plan(book_id)
             before_audio = {p['id']: Path(p['audio_path']).read_bytes() for p in before}
             with self.assertRaises(ValueError): books.set_voice(book_id, 'Mina', voice='kal16')
@@ -94,6 +101,7 @@ class RenderTests(unittest.TestCase):
             self.assertEqual(before_audio[2], Path(after[2]['audio_path']).read_bytes())
             self.assertNotEqual(before_audio[1], Path(after[1]['audio_path']).read_bytes())
             exported = books.export(book_id, format='wav')
+            self.assertAlmostEqual(books.timeline(book_id, offset=0, limit=100)['passages'][-1]['end_seconds'], exported['seconds'], places=5)
             self.assertGreater(inspect_wav(exported['path']), 1)
 
     def test_cache_tampering_is_detected_and_retry_preserves_previous_take(self):

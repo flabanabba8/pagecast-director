@@ -48,3 +48,4 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
   layout, DRM, scanned PDF/OCR and series-wide cast sharing are outside this version.
 - Public source/history/artifact audit, repository/catalog PR, X video and contest
   submission remain. Detailed local receipts live outside the plugin package.
+- The paginated timeline checks cached WAV hashes and durations for the requested prefix. A synthetic multi-voice test checked page continuity, rejected missing cached audio, and matched the final boundary to a WAV export. Encoded formats and later edits can change playback timing.
