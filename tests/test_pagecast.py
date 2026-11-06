@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -72,6 +73,17 @@ class ImportTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which('flite') and shutil.which('ffmpeg'), 'Flite/FFmpeg required')
 class RenderTests(unittest.TestCase):
+    def test_malformed_wav_with_matching_hash_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            books = Books(tmp); book_id = books.import_book(text='Synthetic passage.')['book_id']
+            self.assertEqual(books.render(book_id)['state'], 'complete')
+            path = Path(books.plan(book_id)[1][0]['audio_path'])
+            path.write_bytes(b'not a WAV')
+            receipt_path = path.parent/'receipt.json'; receipt = json.loads(receipt_path.read_text())
+            receipt['audio_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+            receipt_path.write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(ValueError, 'incomplete or changed'): verify_cache(path)
+
     def test_cache_replacement_during_verification_is_rejected(self):
         from pagecast_test import books as module
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
