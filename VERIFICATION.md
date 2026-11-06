@@ -14,6 +14,8 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
   response, reused its cache, exported WAV and M4B, and refused a competing
   process while the book lock was held. A separate mocked PageCast → Podcast
   Studio → YouTube Video Studio pipeline passed with one joined audio track.
+  A malformed mock response was not retried until an explicit retry action;
+  the fixture credential did not appear in saved files.
   No provider request or playback occurred; Windows ACLs, real providers,
   Flite availability, preview playback and perceptual quality remain unverified.
 - EPUB spine order, escaped/unescaped filename spaces, excluded script/style text,
