@@ -117,6 +117,10 @@ class InworldTests(unittest.TestCase):
             self.assertEqual(len(Connection.calls), 2, 'Complete staged audio must be recovered without another paid call')
             self.assertEqual(books.usage(identifier)['reported_characters'], 24)
             verify_cache(books.plan(identifier)[1][0]['audio_path'])
+            timeline = books.timeline(identifier)
+            self.assertEqual(len(timeline['passages']), 1)
+            self.assertGreater(timeline['passages'][0]['end_seconds'], 0)
+            self.assertEqual(len(Connection.calls), 2, 'Timeline must not request paid speech')
             for file in Path(tmp).rglob('*'):
                 if file.is_file(): self.assertNotIn(b'Zml4dHVyZTpmaXh0dXJl', file.read_bytes(), str(file))
 
