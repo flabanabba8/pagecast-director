@@ -8,6 +8,8 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
   umask, and a symlinked database is rejected. Twenty-seven Python tests and
   Hermes validation passed; synthetic PageCast restore and podcast-to-video
   workflows also passed after this change. No new hosted voice request occurred.
+- Native Windows Python 3.14 confirmed that the plugin cannot import without
+  POSIX `fcntl`; Windows remains unsupported. No Windows speech was generated.
 - EPUB spine order, escaped/unescaped filename spaces, excluded script/style text,
   archive traversal rejection, quote/source offsets, apostrophes and scene breaks.
 - Real local Flite synthesis with three voices. A one-passage batch resumed using
@@ -29,7 +31,7 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 - Native backend route settings and Desktop React/jsdom flow: import does not
   synthesize; speaker assignment, explicit Inworld selection, voice catalog,
   manual voice lock, explicit render and export dispatch work; polling cleans up.
-- Hermes catalog validation and Plugin Doctor load/register the 13 tools cleanly.
+- Hermes catalog validation and Plugin Doctor previously loaded and registered the plugin tools cleanly; the current manifest declares fourteen tools.
 
 ## Remaining / limitations
 
