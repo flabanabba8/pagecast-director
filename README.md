@@ -20,7 +20,7 @@ Desktop half through Hermes's normal controls. The tools also work through chat.
 4. Render a batch. Call again to resume a partial book; unchanged passages reuse
    accepted audio. Voice locks prevent incidental replacement by later casting.
 5. Preview an existing rendered passage, edit a line or voice, and render the change.
-6. Optionally call `pagecast_timeline` to obtain paginated passage boundaries from verified cached WAV durations. Each page rechecks the entire requested prefix, so long books can take substantial local disk I/O; later passages may still be missing. Set `include_text` only when you explicitly need the potentially sensitive, untrusted passage text for captions. WAV export concatenates passages in that order, but other encoding and edits can change playback timing.
+6. Optionally call `pagecast_timeline` to obtain paginated passage boundaries from verified cached WAV durations. Metadata-only pages can contain up to 1,000 passages; pages including text are limited to 100. Each page rechecks the entire requested prefix, so long books can take substantial local disk I/O; later passages may still be missing. Set `include_text` only when you explicitly need the potentially sensitive, untrusted passage text for captions. WAV export concatenates passages in that order, but other encoding and edits can change playback timing.
 7. Export the current revision. Every audio hash is checked; missing or altered
    cache entries prevent export. M4B has verified chapter metadata; WAV is mono24kHz.
 

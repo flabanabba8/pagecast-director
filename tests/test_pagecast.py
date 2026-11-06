@@ -112,6 +112,11 @@ class RenderTests(unittest.TestCase):
             self.assertEqual(page['passages'][0]['start_seconds'], 125.0)
             self.assertEqual(page['passages'][-1]['end_seconds'], 250.0)
             self.assertEqual(verify.call_count, 2)
+            with patch.object(books, 'plan', return_value=(book, passages, {})), patch.object(module, 'verify_cache', return_value=1.25) as verify:
+                full_page = books.timeline(book_id, limit=1000)
+                self.assertEqual(len(full_page['passages']), 205); self.assertIsNone(full_page['next_offset'])
+                self.assertEqual(verify.call_count, 2)
+                with self.assertRaises(ValueError): books.timeline(book_id, limit=101, include_text=True)
 
     def test_three_voices_partial_resume_and_selective_regeneration(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -413,8 +413,8 @@ class Books:
 
     def timeline(self, book_id, offset=0, limit=50, include_text=False):
         if type(include_text) is not bool: raise ValueError('include_text must be boolean')
-        if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 100:
-            raise ValueError('Use nonnegative offset and limit 1–100')
+        if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= (100 if include_text else 1000):
+            raise ValueError('Use nonnegative offset and limit 1–100 with text or 1–1000 without text')
         with self.lock(book_id):
             book, passages, _ = self.plan(book_id)
             if offset > len(passages): raise ValueError('Timeline offset exceeds passage count')
