@@ -71,6 +71,20 @@ class ImportTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which('flite') and shutil.which('ffmpeg'), 'Flite/FFmpeg required')
 class RenderTests(unittest.TestCase):
+    def test_large_timeline_paging_reuses_verified_cache(self):
+        from pagecast_test import books as module
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            books = Books(tmp); book_id = books.import_book(text='Synthetic test.')['book_id']
+            book = {'revision': 1}
+            passages = [{'id': i, 'chapter': 0, 'paragraph': i, 'speaker': 'Narrator', 'text': 'Synthetic', 'audio_path': 'fixture-' + str(i % 2)} for i in range(205)]
+            with patch.object(books, 'plan', return_value=(book, passages, {})), patch.object(module, 'verify_cache', return_value=1.25) as verify:
+                page = books.timeline(book_id, offset=100, limit=100)
+            self.assertEqual(page['verified_prefix_passages'], 200)
+            self.assertEqual(page['next_offset'], 200)
+            self.assertEqual(page['passages'][0]['start_seconds'], 125.0)
+            self.assertEqual(page['passages'][-1]['end_seconds'], 250.0)
+            self.assertEqual(verify.call_count, 2)
+
     def test_three_voices_partial_resume_and_selective_regeneration(self):
         with tempfile.TemporaryDirectory() as tmp:
             books = Books(tmp); book_id = books.import_book('Original scene', text=TEXT)['book_id']
