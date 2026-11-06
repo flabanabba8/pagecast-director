@@ -5,6 +5,8 @@ import fcntl
 import hashlib
 import json
 import math
+import os
+import stat
 from pathlib import Path
 import re
 import shutil
@@ -47,19 +49,31 @@ def inspect_wav(path):
 def verify_cache(path, full=True):
     path = Path(path)
     if path.is_symlink() or path.parent.is_symlink(): raise ValueError('Symlinked audio cache is unsupported')
+    def identity(value): return (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns)
     try:
-        receipt = json.loads((path.parent / 'receipt.json').read_text())
-        stamp = path.stat()
+        receipt_path = path.parent / 'receipt.json'
+        if receipt_path.is_symlink(): raise ValueError('Symlinked audio receipt is unsupported')
+        receipt = json.loads(receipt_path.read_text())
+        stamp = path.lstat()
+        if not stat.S_ISREG(stamp.st_mode): raise ValueError('Cached audio is not a regular file')
         # ponytail: size/mtime reuse avoids rereading a whole book on every batch;
-        # export always checks the complete audio hash before delivering a file.
+        # export and timeline check the complete audio hash before using a file.
         if full or stamp.st_size != receipt.get('audio_bytes') or stamp.st_mtime_ns != receipt.get('audio_mtime_ns'):
-            with path.open('rb') as stream: actual = hashlib.file_digest(stream, 'sha256').hexdigest()
-            if actual != receipt['audio_sha256']: raise ValueError('Cached audio bytes changed')
+            fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
+            with os.fdopen(fd, 'rb') as stream:
+                before = os.fstat(stream.fileno())
+                actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+                after = os.fstat(stream.fileno())
+            if identity(stamp) != identity(before) or identity(before) != identity(after) or actual != receipt['audio_sha256']:
+                raise ValueError('Cached audio bytes changed')
         seconds = receipt['seconds']
         if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0: raise ValueError('Invalid cached duration')
-    except (OSError, KeyError, ValueError) as exc:
+        duration = inspect_wav(path) if full else seconds
+        current = path.lstat()
+        if identity(stamp) != identity(current) or not stat.S_ISREG(current.st_mode): raise ValueError('Cached audio changed while inspecting')
+        return duration
+    except (OSError, KeyError, ValueError, wave.Error, EOFError) as exc:
         raise ValueError('Audio cache is incomplete or changed; use pagecast_retry for only the affected passage') from exc
-    return inspect_wav(path) if full else seconds
 
 
 class Books:

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -71,6 +72,21 @@ class ImportTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which('flite') and shutil.which('ffmpeg'), 'Flite/FFmpeg required')
 class RenderTests(unittest.TestCase):
+    def test_cache_replacement_during_verification_is_rejected(self):
+        from pagecast_test import books as module
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            books = Books(tmp); book_id = books.import_book(text='Synthetic passage.')['book_id']
+            self.assertEqual(books.render(book_id)['state'], 'complete')
+            path = Path(books.plan(book_id)[1][0]['audio_path'])
+            replacement = path.with_name('replacement.wav'); replacement.write_bytes(path.read_bytes())
+            original = module.hashlib.file_digest
+            def replace(stream, algorithm):
+                result = original(stream, algorithm)
+                os.replace(replacement, path)
+                return result
+            with patch.object(module.hashlib, 'file_digest', side_effect=replace):
+                with self.assertRaisesRegex(ValueError, 'incomplete or changed'): verify_cache(path)
+
     def test_large_timeline_paging_reuses_verified_cache(self):
         from pagecast_test import books as module
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
