@@ -89,6 +89,10 @@ function PageCast({ ctx }) {
       button('Import editable copy', undefined, busy || (!text.trim() && !sourcePath.trim()), { type: 'submit' }))),
     detail && h('section', { style: { display: 'grid', gap: 20 }, 'aria-label': 'Book editor' },
       h('div', { style: card }, h('h2', null, detail.book.title), h('p', null, `${detail.total} ${detail.total === 1 ? 'passage' : 'passages'} · revision ${detail.book.revision}`),
+        h('p', { role: detail.source_text_status === 'changed' ? 'alert' : undefined, style: { fontWeight: detail.source_text_status === 'unchanged' ? 400 : 600 } },
+          detail.source_text_status === 'unchanged' ? 'Passage text matches the imported text. Review speaker assignments separately.' :
+          detail.source_text_status === 'changed' ? 'Passage text differs from the import. Review the script before rendering.' :
+          'Import-time text baseline unavailable. Review the script before rendering.'),
         h('p', { role: 'status' }, detail.render ? `${detail.render.state} · last run ${detail.render.done}/${detail.render.total}` : 'Ready to cast and render'),
         detail.usage?.requests > 0 && h('p', null, `Inworld: ${detail.usage.requests} requests · ${detail.usage.reported_characters} provider-reported characters · ${detail.usage.unknown_outcomes} unknown outcomes`),
         detail.render?.error && h('p', { role: 'alert' }, detail.render.error), notice && h('p', null, notice),

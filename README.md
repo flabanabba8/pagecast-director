@@ -32,6 +32,8 @@ No speech-generation failure is retried automatically.
 New imports retain hashes of their initial segmented passage text. `pagecast_book`
 and `pagecast_timeline` report `source_text_status` as `unchanged`, `changed`,
 or `unavailable`; older books have no baseline and report `unavailable`.
+The Desktop editor displays this status and warns when text differs or the
+baseline is unavailable.
 This point-in-time comparison detects current text differences; text restored
 exactly to its original value reports `unchanged`. It does not verify source authenticity,
 speaker assignments, voice selection or subsequent concurrent changes. Recheck
