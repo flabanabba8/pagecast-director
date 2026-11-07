@@ -49,7 +49,7 @@ def post(host, path, headers, payload, provider, observe=None):
         response = connection.getresponse()
         if response.status != 200:
             event('unknown' if response.status >= 500 else 'rejected', {'http_status': response.status})
-            reasons = {400: 'request rejected; check model, voice and text', 401: 'authentication failed', 403: 'access denied; check key permissions and credits',
+            reasons = {400: 'request rejected; check model, voice and text', 401: 'authentication failed', 402: 'payment required; the account is probably out of credits or over its billing limit', 403: 'access denied; check key permissions and credits',
                        404: 'voice or model not found', 422: 'request rejected; check model, voice and text', 429: 'rate/quota limit reached'}
             raise HostedError(f'{provider} HTTP {response.status}: {reasons.get(response.status, "request failed; redirects are never followed")}. No automatic retry was made')
         raw = response.read(MAX_RESPONSE + 1)

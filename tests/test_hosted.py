@@ -67,6 +67,13 @@ class HostedTests(unittest.TestCase):
                 fn('Hello.', voice)
             self.assertEqual(len(Connection.calls), 1); self.assertNotIn('fixture-key', str(error.exception))
 
+    def test_payment_required_says_so(self):
+        Connection.status = 402
+        a, b = patched('x', 'fixture-key')
+        with a, b, self.assertRaisesRegex(hosted.HostedError, 'out of credits'):
+            hosted.elevenlabs('Hello.', 'Rachel')
+        self.assertEqual(len(Connection.calls), 1)
+
     def test_http_error_not_retried_and_limits_checked_before_credentials(self):
         Connection.status = 429
         a, b = patched('x', 'fixture-key')

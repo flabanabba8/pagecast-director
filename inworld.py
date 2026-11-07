@@ -49,7 +49,7 @@ def request(method, path, payload=None, observe=None):
         response = connection.getresponse()
         if response.status != 200:
             event('unknown' if response.status >= 500 else 'rejected', {'http_status': response.status})
-            reasons = {401: 'authentication failed', 403: 'access denied; check speech permission, credits and voice access',
+            reasons = {401: 'authentication failed', 402: 'payment required; the account is probably out of credits or over its billing limit', 403: 'access denied; check speech permission, credits and voice access',
                        404: 'voice or model not found', 429: 'rate/quota limit reached'}
             reason = reasons.get(response.status, 'request failed; redirects are never followed')
             if response.status == 403 and method == 'GET' and path.startswith('/voices/'):
