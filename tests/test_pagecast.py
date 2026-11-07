@@ -70,6 +70,14 @@ class ImportTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Credential/configuration'):
                 import_file(str(source))
 
+    def test_mixed_case_private_directory_is_not_a_book_or_voice_source(self):
+        from pagecast_test.reference_paths import resolve_reference
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            for name in ('.CoDeX', '.HeRmEs'):
+                folder=Path(tmp)/name;folder.mkdir();source=folder/'fixture.txt';source.write_text('fictional')
+                with self.assertRaises(ValueError):import_file(str(source))
+                with self.assertRaises(ValueError):resolve_reference(str(source),Path(tmp)/'plugin')
+
     def test_profile_book_requires_explicit_opt_in(self):
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
             profile = Path(tmp)/'custom-profile'

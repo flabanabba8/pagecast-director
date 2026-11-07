@@ -48,10 +48,10 @@ def import_file(path, profile_data=None, allow_profile_books=False):
     source = source.resolve(strict=True)
     private = ('.ssh', '.gnupg', '.aws', '.azure', '.codex', '.docker', '.kube', '.pki', '.config')
     data_root = Path(profile_data).resolve() if profile_data is not None else None
-    profile_home = data_root.parent if data_root is not None and data_root.name == 'plugin-data' else None
+    profile_home = data_root.parent if data_root is not None and data_root.name.casefold() == 'plugin-data' else None
     allowed = allow_profile_books and profile_home is not None and source.is_relative_to(data_root)
-    protected = '.hermes' in original_parts or '.hermes' in source.parts or (profile_home is not None and source.is_relative_to(profile_home))
-    if any(part in private for part in (*original_parts, *source.parts)) or protected and not allowed:
+    protected = any(part.casefold() == '.hermes' for part in (*original_parts, *source.parts)) or (profile_home is not None and source.is_relative_to(profile_home))
+    if any(part.casefold() in private for part in (*original_parts, *source.parts)) or protected and not allowed:
         raise ValueError('Credential/configuration folders are not book sources; selected profile plugin books require explicit opt-in')
     if not source.is_file() or source.stat().st_size > 16 * 1024 * 1024:
         raise ValueError('Book must be a regular file of at most16 MiB')

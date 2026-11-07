@@ -4,8 +4,10 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 
 ## Passed
 
+- Mixed-case private-directory boundaries were checked using synthetic paths on Linux and native Windows; no real credentials were used.
+
 - The database is owner-only before SQLite opens it, including with a permissive
-  umask, and a symlinked database is rejected. Twenty-eight Python tests and
+  umask, and a symlinked database is rejected. Twenty-nine Python tests and
   Hermes validation passed; synthetic PageCast restore and podcast-to-video
   workflows also passed after this change. No new hosted voice request occurred.
 - An initial Windows import failed because POSIX `fcntl` was unavailable. After
