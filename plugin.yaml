@@ -22,6 +22,10 @@ provides_tools:
 config_schema:
   inworld_api_key: {type: secret, env: INWORLD_API_KEY, required: false, label: "Inworld API credential", description: "Complete Base64 credential copied from Inworld Portal. Stored by Hermes, never in book data."}
   inworld_model: {type: str, default: "inworld-tts-2", choices: [inworld-tts-2, inworld-tts-2-flash], description: "Hosted Inworld speech model; synthesis sends text/voice IDs to Inworld and consumes your account credits."}
+  elevenlabs_api_key: {type: secret, env: ELEVENLABS_API_KEY, required: false, label: "ElevenLabs API key", description: "Stored by Hermes, never in book data. Synthesis sends text to ElevenLabs and consumes your account credits."}
+  elevenlabs_model: {type: str, default: "eleven_multilingual_v2", choices: [eleven_multilingual_v2, eleven_flash_v2_5, eleven_turbo_v2_5], description: "Hosted ElevenLabs model."}
+  gemini_api_key: {type: secret, env: GEMINI_API_KEY, required: false, label: "Gemini API key", description: "Stored by Hermes, never in book data. Synthesis sends text to Google and may consume your quota or billing."}
+  gemini_model: {type: str, default: "gemini-3.8-flash-tts", choices: [gemini-3.8-flash-tts, gemini-3.8-flash-lite-tts, gemini-3.1-flash-tts-preview], description: "Hosted Gemini speech model."}
   higgs_url: {type: str, default: "http://localhost:8000", description: "Already-running local Higgs TTS3 server origin."}
   higgs_model: {type: str, default: "bosonai/higgs-tts-3-4b", description: "Served local model identifier."}
   higgs_revision: {type: str, default: "", description: "Model revision used in audio cache identity; update when changing weights."}

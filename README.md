@@ -16,7 +16,12 @@ Desktop half through Hermes's normal controls. The tools also work through chat.
    fallback; the parser does not infer character identities or claim perfect attribution.
 3. Choose voices. Flite provides lightweight English demonstration voices. Higgs
    TTS 3 uses your existing local server and optional user-owned reference WAVs.
-   Inworld TTS-2/TTS-2 Flash uses your hosted account and existing voice IDs.
+   Inworld TTS-2/TTS-2 Flash, ElevenLabs and Gemini speech use your own hosted
+   accounts and existing voice IDs/names (for example `Rachel` or `Kore`); text
+   is sent to that provider and consumes your credits or quota. Keys are stored
+   by Hermes (`INWORLD_API_KEY`, `ELEVENLABS_API_KEY`, `GEMINI_API_KEY`), never
+   in book data. ElevenLabs and Gemini request shapes follow the vendors'
+   public docs as of 2026-11-07 and are tested against mocks only, not live.
 4. Render a batch. Call again to resume a partial book; unchanged passages reuse
    accepted audio. Voice locks prevent incidental replacement by later casting.
 5. Preview an existing rendered passage, edit a line or voice, and render the change.

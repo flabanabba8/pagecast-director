@@ -18,7 +18,7 @@ import wave
 
 from .higgs import synthesize
 from .reference_paths import resolve_reference
-from . import inworld
+from . import inworld, hosted
 from . import locking
 from .process_env import process_env
 from .importers import MAX_TEXT, import_file, segment
@@ -199,7 +199,7 @@ class Books:
         if not isinstance(locked, bool) or not isinstance(replace_locked, bool): raise ValueError('Lock flags must be booleans')
         if not isinstance(speaker, str) or not 1 <= len(speaker.strip()) <= 80: raise ValueError('Choose a speaker name')
         if not isinstance(reference_audio, str) or not isinstance(reference_text, str): raise ValueError('Reference path and transcript must be strings')
-        if voice is None: voice = 'rms' if engine == 'flite' else 'Ashley' if engine == 'inworld' else 'default'
+        if voice is None: voice = 'rms' if engine == 'flite' else 'Ashley' if engine == 'inworld' else 'Rachel' if engine == 'elevenlabs' else 'Kore' if engine == 'gemini' else 'default'
         spec = {'engine': engine, 'voice': voice}
         if engine == 'flite':
             if voice not in FLITE_VOICES: raise ValueError('Choose a built-in Flite voice: ' + ', '.join(FLITE_VOICES))
@@ -211,7 +211,10 @@ class Books:
         elif engine == 'inworld':
             inworld.valid_voice(voice)
             if reference_audio or reference_text: raise ValueError('For Inworld, select an existing voice ID; local references are supported by Higgs only')
-        else: raise ValueError('Choose flite, higgs or inworld')
+        elif engine in ('elevenlabs', 'gemini'):
+            hosted.valid_voice(voice, engine)
+            if reference_audio or reference_text: raise ValueError('Select an existing hosted voice; local references are supported by Higgs only')
+        else: raise ValueError('Choose flite, higgs, inworld, elevenlabs or gemini')
         with self.lock(book_id), self.db() as db:
             row = db.execute('SELECT * FROM voices WHERE book=? AND speaker=?', (book_id, speaker)).fetchone()
             if row is None: raise ValueError('Assign a passage to this speaker first')
@@ -250,6 +253,14 @@ class Books:
             model = self.settings.get('inworld_model', 'inworld-tts-2')
             if model not in inworld.MODELS: raise ValueError('Choose a supported Inworld TTS-2 model')
             value.update(model=model, delivery_mode='BALANCED', sample_rate=48000, request_format='inworld-unary-linear16-v1')
+        elif value['engine'] == 'elevenlabs':
+            model = self.settings.get('elevenlabs_model', 'eleven_multilingual_v2')
+            if model not in hosted.ELEVEN_MODELS: raise ValueError('Choose a supported ElevenLabs model')
+            value.update(model=model, sample_rate=24000, request_format='elevenlabs-pcm24k-v1')
+        elif value['engine'] == 'gemini':
+            model = self.settings.get('gemini_model', 'gemini-3.8-flash-tts')
+            if model not in hosted.GEMINI_MODELS: raise ValueError('Choose a supported Gemini speech model')
+            value.update(model=model, sample_rate=24000, request_format='gemini-interactions-wav24k-v1')
         else:
             value.update(endpoint=self.settings.get('higgs_url', 'http://localhost:8000'), model=self.settings.get('higgs_model', 'bosonai/higgs-tts-3-4b'), revision=self.settings.get('higgs_revision', ''))
             path = value.get('reference_audio')
@@ -289,14 +300,17 @@ class Books:
                 COALESCE(SUM(CASE WHEN reported_units IS NULL THEN requested_units ELSE 0 END),0) input_units_without_reported_usage,
                 COALESCE(SUM(CASE WHEN status IN ('pending','unknown') OR (status IN ('received','audio_invalid') AND reported_units IS NULL) THEN 1 ELSE 0 END),0) unknown_outcomes
                 FROM paid_attempts WHERE book=?''', (book_id,)).fetchone()
-        return {**dict(row), 'provider': 'inworld', 'notice': 'Provider-reported characters are usage, not a dollar charge. Unreported input units are estimates; check provider billing.'}
+        return {**dict(row), 'provider': 'hosted (Inworld, ElevenLabs, Gemini; see model per attempt)', 'notice': 'Provider-reported characters are usage, not a dollar charge. Unreported input units are estimates; check provider billing.'}
 
     def _inworld_audio(self, book_id, passage, voice):
+        return self._paid_audio(book_id, passage, voice, lambda t, v, m, o: inworld.synthesize(t, v, m, o), 'Inworld')
+
+    def _paid_audio(self, book_id, passage, voice, call, label):
         with self.db() as db:
             prior = db.execute("SELECT id FROM paid_attempts WHERE book=? AND signature=? AND retry_allowed=0 AND status IN ('pending','unknown','received','audio_invalid') LIMIT 1",
                                (book_id, passage['signature'])).fetchone()
         if prior:
-            raise RuntimeError('A previous Inworld attempt has no usable cache and may have been billed. Review usage and explicitly use pagecast_retry before sending another paid request')
+            raise RuntimeError(f'A previous {label} attempt has no usable cache and may have been billed. Review usage and explicitly use pagecast_retry before sending another paid request')
         attempt = uuid.uuid4().hex
         def observe(status, data):
             with self.db() as db:
@@ -305,7 +319,7 @@ class Books:
                     reported_units=COALESCE(excluded.reported_units,paid_attempts.reported_units),
                     http_status=COALESCE(excluded.http_status,paid_attempts.http_status),model=excluded.model''',
                     (attempt, book_id, passage['id'], passage['signature'], status, inworld.units(passage['text']), data.get('reported_units'), data.get('model_id', voice['model']), data.get('http_status'), time.time()))
-        audio, _ = inworld.synthesize(passage['text'], voice['voice'], voice['model'], observe)
+        audio, _ = call(passage['text'], voice['voice'], voice['model'], observe)
         return audio
 
     def render(self, book_id, max_segments=20):
@@ -352,6 +366,10 @@ class Books:
                             finally: script.unlink(missing_ok=True)
                         elif voice['engine'] == 'higgs':
                             raw.write_bytes(synthesize(voice['endpoint'], voice['model'], passage['text'], voice['voice'], voice.get('reference_data', ''), voice.get('reference_text', '')))
+                        elif voice['engine'] == 'elevenlabs':
+                            raw.write_bytes(self._paid_audio(book_id, passage, voice, hosted.elevenlabs, 'ElevenLabs'))
+                        elif voice['engine'] == 'gemini':
+                            raw.write_bytes(self._paid_audio(book_id, passage, voice, hosted.gemini, 'Gemini'))
                         else:
                             raw.write_bytes(self._inworld_audio(book_id, passage, voice))
                         staging = folder / 'cache' / ('.staging-' + uuid.uuid4().hex); staging.mkdir(mode=0o700)

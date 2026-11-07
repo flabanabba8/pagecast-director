@@ -13,7 +13,7 @@ TOOLS = {
     'pagecast_assign': ('Assign exact passage IDs to a speaker; preserves text and invalidates only audio whose effective voice changes. Use Narrator for narration or uncertain quotations.', {
         'book_id': BOOK, 'passage_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 500}, 'speaker': {'type': 'string', 'maxLength': 80}}, ['book_id', 'passage_ids', 'speaker']),
     'pagecast_voice': ('Set and lock a speaker voice. Flite is local; Higgs uses your configured loopback server/reference. Inworld uses hosted TTS-2 and your Hermes-held API credential; synthesis consumes credits and sends passage text/voice IDs to Inworld. Never replace a locked voice without an explicit user-requested change.', {
-        'book_id': BOOK, 'speaker': {'type': 'string'}, 'engine': {'type': 'string', 'enum': ['flite', 'higgs', 'inworld']},
+        'book_id': BOOK, 'speaker': {'type': 'string'}, 'engine': {'type': 'string', 'enum': ['flite', 'higgs', 'inworld', 'elevenlabs', 'gemini']},
         'voice': {'type': 'string'}, 'reference_audio': {'type': 'string'}, 'reference_text': {'type': 'string'},
         'locked': {'type': 'boolean'}, 'replace_locked': {'type': 'boolean'}}, ['book_id', 'speaker']),
     'pagecast_edit': ('Edit only one imported passage. Source file remains unchanged and other passages retain their cached audio.', {
@@ -47,7 +47,7 @@ def invoke(name, args, settings=None):
 
 def register(ctx):
     def settings():
-        keys = ('inworld_model', 'higgs_url', 'higgs_model', 'higgs_revision')
+        keys = ('inworld_model', 'elevenlabs_model', 'gemini_model', 'higgs_url', 'higgs_model', 'higgs_revision')
         return {key: value for key in keys if (value := ctx.get_config(key)) is not None}
     for name, (description, properties, required) in TOOLS.items():
         ctx.register_tool(name=name, toolset='pagecast_director', schema={'name': name, 'description': description, 'parameters': {

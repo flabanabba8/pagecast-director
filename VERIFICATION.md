@@ -71,3 +71,5 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
   submission remain. Detailed local receipts live outside the plugin package.
 - The paginated timeline checks cached WAV hashes and durations for the requested prefix. A synthetic multi-voice test checked page continuity, rejected missing cached audio, and matched the final boundary to a WAV export. Encoded formats and later edits can change playback timing.
 - Timeline text is omitted by default and is included only on explicit request; a fixture confirmed both behaviors. Passage text may be sensitive and is not evidence that speech matches it.
+
+- ElevenLabs (`pcm_24000`) and Gemini (Interactions API, WAV 24 kHz) engines were added beside Inworld. Six mock-transport tests cover request shape, auth header placement, audio extraction, no-retry on error, limits checked before credentials, per-engine render/cache/usage and rejection of unknown engines. The Desktop flow test still passes. No live ElevenLabs or Gemini request, listening review or Windows run has been done; request shapes follow vendor docs read on 2026-11-07 and may drift.

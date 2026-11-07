@@ -15,11 +15,12 @@ function Voice({ name, spec, bookId, call, task, reload, busy }) {
   const voiceListId = useId()
   useEffect(() => { setEngine(spec.engine); setVoice(spec.voice); setLocked(spec.locked); setReference(spec.reference_audio || ''); setTranscript(spec.reference_text || '') }, [spec.engine, spec.voice, spec.locked, spec.reference_audio, spec.reference_text])
   return h('article', { style: card }, h('strong', null, name),
-    h('div', { style: row }, label('Engine', h('select', { style: field, value: engine, disabled: busy, onChange: e => { setEngine(e.target.value); setVoice(e.target.value === 'flite' ? 'rms' : e.target.value === 'inworld' ? 'Ashley' : 'default'); setLocked(true) } },
-      h('option', { value: 'flite' }, 'Flite · local English'), h('option', { value: 'higgs' }, 'Higgs TTS 3 · local server'), h('option', { value: 'inworld' }, 'Inworld · cloud credits'))),
+    h('div', { style: row }, label('Engine', h('select', { style: field, value: engine, disabled: busy, onChange: e => { setEngine(e.target.value); setVoice(e.target.value === 'flite' ? 'rms' : e.target.value === 'inworld' ? 'Ashley' : e.target.value === 'elevenlabs' ? 'Rachel' : e.target.value === 'gemini' ? 'Kore' : 'default'); setLocked(true) } },
+      h('option', { value: 'flite' }, 'Flite · local English'), h('option', { value: 'higgs' }, 'Higgs TTS 3 · local server'), h('option', { value: 'inworld' }, 'Inworld · cloud credits'), h('option', { value: 'elevenlabs' }, 'ElevenLabs · cloud credits'), h('option', { value: 'gemini' }, 'Gemini · cloud quota'))),
       label('Voice', engine === 'flite'
         ? h('select', { style: field, value: voice, disabled: busy, onChange: e => { setVoice(e.target.value); setLocked(true) } }, ...['rms', 'slt', 'awb', 'kal16', 'kal'].map(v => h('option', { key: v, value: v }, v.toUpperCase())))
         : h('input', { style: field, value: voice, list: engine === 'inworld' ? voiceListId : undefined, disabled: busy, onChange: e => { setVoice(e.target.value); setLocked(true) } }))),
+    (engine === 'elevenlabs' || engine === 'gemini') && h('p', null, `Speech text and the selected voice are sent to ${engine === 'gemini' ? 'Google Gemini' : 'ElevenLabs'}. Uses your configured API key and account credits or quota; no automatic retries.`),
     engine === 'inworld' && h('div', null,
       h('p', null, 'Speech text and the selected voice ID are sent to Inworld. Uses your configured API credential and account credits.'),
       h('datalist', { id: voiceListId }, ...catalog.map(v => h('option', { key: v.id, value: v.id }, v.name + (v.language ? ' · ' + v.language : '')))),
@@ -94,7 +95,7 @@ function PageCast({ ctx }) {
           detail.source_text_status === 'changed' ? 'Passage text differs from the import. Review the script before rendering.' :
           'Import-time text baseline unavailable. Review the script before rendering.'),
         h('p', { role: 'status' }, detail.render ? `${detail.render.state} · last run ${detail.render.done}/${detail.render.total}` : 'Ready to cast and render'),
-        detail.usage?.requests > 0 && h('p', null, `Inworld: ${detail.usage.requests} requests · ${detail.usage.reported_characters} provider-reported characters · ${detail.usage.unknown_outcomes} unknown outcomes`),
+        detail.usage?.requests > 0 && h('p', null, `Hosted speech: ${detail.usage.requests} requests · ${detail.usage.reported_characters} provider-reported characters · ${detail.usage.unknown_outcomes} unknown outcomes`),
         detail.render?.error && h('p', { role: 'alert' }, detail.render.error), notice && h('p', null, notice),
         h('div', { style: row }, button(detail.render?.state === 'partial' ? 'Resume rendering' : 'Render changed passages', render, busy),
           (rendering || detail.render?.state === 'rendering') && button('Cancel after current passage', async () => { try { await call('pagecast_cancel', { book_id: bookId }); setNotice('Cancellation requested.') } catch (e) { setError(String(e.message || e)) } }),
