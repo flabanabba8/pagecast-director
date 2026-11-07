@@ -95,6 +95,16 @@ class ImportTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Credential/configuration'):
                 books.import_book(source_path=str(unrelated), allow_profile_books=True)
 
+    def test_mixed_case_profile_data_requires_explicit_opt_in(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            profile=Path(tmp)/'custom-profile';data=profile/'PlUgIn-DaTa';library=data/'epub-clinic';library.mkdir(parents=True)
+            source=library/'book.txt';source.write_text('Fictional book.')
+            books=Books(data/'pagecast-director')
+            with self.assertRaises(ValueError):books.import_book(source_path=str(source))
+            self.assertEqual(books.import_book(source_path=str(source),allow_profile_books=True)['passages'],1)
+            unrelated=profile/'unrelated.txt';unrelated.write_text('not a book')
+            with self.assertRaises(ValueError):books.import_book(source_path=str(unrelated),allow_profile_books=True)
+
     def test_epub_spine_unescaped_spaces_and_no_archive_traversal(self):
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
             epub = Path(tmp) / 'original.epub'

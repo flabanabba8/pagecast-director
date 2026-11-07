@@ -121,7 +121,7 @@ class Books:
         if type(allow_profile_books) is not bool: raise ValueError('allow_profile_books must be boolean')
         if (text is None) == (source_path is None): raise ValueError('Provide exactly one of text or source_path')
         if source_path is not None:
-            profile_data = self.root.parent if self.root.parent.name == 'plugin-data' else None
+            profile_data = self.root.parent if self.root.parent.name.casefold() == 'plugin-data' else None
             source_title, chapters, source_hash = import_file(source_path, profile_data, allow_profile_books)
             title = title or source_title
         else:
