@@ -4,6 +4,7 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 
 ## Passed
 
+- New imports save per-passage text hashes. Synthetic checks cover unchanged text, speaker reassignment, edited text, exact restoration and missing, malformed or legacy baselines; the timeline reports the same status. A separate Linux PageCast-to-Podcast fixture rejects a changed handoff, and a native Windows text-only fixture checked unchanged, changed and unavailable states. The status is point-in-time and does not authenticate sources or speaker assignments; no provider request or playback was made for these checks.
 - A standalone headless browser fixture using the Desktop component, mock API responses and approximate theme variables was inspected at 1280 px and 375 px widths. No horizontal overflow was observed in the selected book state; a singular passage label and disabled-button appearance were corrected, and the Desktop flow test passed. This is not native Hermes Desktop, real service, accessibility-conformance or complete state coverage.
 
 - Mixed-case private-directory boundaries and explicit profile-data opt-in were checked using synthetic paths on Linux and native Windows; no real credentials were used.

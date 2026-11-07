@@ -21,6 +21,30 @@ TEXT = 'The observatory lights flickered.\n“Did you save the coordinates?”\n
 
 
 class ImportTests(unittest.TestCase):
+    def test_source_text_status_tracks_edits_and_legacy_books(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
+            books = Books(tmp); book_id = books.import_book(text='First line.\nSecond line.')['book_id']
+            original = books.get(book_id)['passages'][0]['text']
+            self.assertEqual(books.get(book_id)['source_text_status'], 'unchanged')
+            books.assign(book_id, [0], 'Speaker')
+            self.assertEqual(books.get(book_id)['source_text_status'], 'unchanged')
+            books.edit(book_id, 0, 'Changed line.')
+            self.assertEqual(books.get(book_id)['source_text_status'], 'changed')
+            book, passages, voices = books._snapshot(book_id)
+            for passage in passages: passage['audio_path'] = 'fixture-audio'
+            with patch.object(books, 'plan', return_value=(book, passages, voices)), patch('pagecast_test.books.verify_cache', return_value=1.0):
+                self.assertEqual(books.timeline(book_id)['source_text_status'], 'changed')
+            books.edit(book_id, 0, original)
+            self.assertEqual(books.get(book_id)['source_text_status'], 'unchanged')
+            with books.db() as db: db.execute('UPDATE source_passage_hashes SET text_sha256=? WHERE book=? AND passage=?', ('bad', book_id, 0))
+            self.assertEqual(books.get(book_id)['source_text_status'], 'unavailable')
+            with books.db() as db: db.execute('DELETE FROM source_passage_hashes WHERE book=? AND passage=?', (book_id, 0))
+            self.assertEqual(books.get(book_id)['source_text_status'], 'unavailable')
+            with books.db() as db: db.execute('DELETE FROM source_passage_hashes WHERE book=?', (book_id,))
+            self.assertEqual(books.get(book_id)['source_text_status'], 'unavailable')
+            with books.db() as db: db.execute('DROP TABLE source_passage_hashes')
+            self.assertEqual(Books(tmp).get(book_id)['source_text_status'], 'unavailable')
+
     def test_database_is_private_before_sqlite_opens_it(self):
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
             original = package.books.sqlite3.connect

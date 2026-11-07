@@ -93,6 +93,7 @@ class Books:
             db.executescript('''
               CREATE TABLE IF NOT EXISTS books(id TEXT PRIMARY KEY,title TEXT NOT NULL,revision INTEGER NOT NULL,source_hash TEXT NOT NULL,created REAL NOT NULL);
               CREATE TABLE IF NOT EXISTS passages(book TEXT NOT NULL,id INTEGER NOT NULL,chapter INTEGER NOT NULL,chapter_title TEXT NOT NULL,paragraph INTEGER NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,quote_id TEXT,text TEXT NOT NULL,speaker TEXT NOT NULL,PRIMARY KEY(book,id));
+              CREATE TABLE IF NOT EXISTS source_passage_hashes(book TEXT NOT NULL,passage INTEGER NOT NULL,text_sha256 TEXT NOT NULL,PRIMARY KEY(book,passage));
               CREATE TABLE IF NOT EXISTS voices(book TEXT NOT NULL,speaker TEXT NOT NULL,spec TEXT NOT NULL,locked INTEGER NOT NULL,PRIMARY KEY(book,speaker));
               CREATE TABLE IF NOT EXISTS audio(book TEXT NOT NULL,passage INTEGER NOT NULL,signature TEXT NOT NULL,path TEXT NOT NULL,seconds REAL NOT NULL,PRIMARY KEY(book,passage));
               CREATE TABLE IF NOT EXISTS renders(book TEXT PRIMARY KEY,state TEXT NOT NULL,done INTEGER NOT NULL,total INTEGER NOT NULL,error TEXT,updated REAL NOT NULL);
@@ -137,6 +138,8 @@ class Books:
             db.execute('INSERT INTO books VALUES(?,?,?,?,?)', (identifier, title, 1, source_hash, time.time()))
             db.executemany('INSERT INTO passages VALUES(?,?,?,?,?,?,?,?,?,?)',
                 [(identifier, i, u['chapter'], u['chapter_title'], u['paragraph'], u['start'], u['end'], u['quote_id'], u['text'], 'Narrator') for i, u in enumerate(units)])
+            db.executemany('INSERT INTO source_passage_hashes VALUES(?,?,?)',
+                [(identifier, i, hashlib.sha256(u['text'].encode('utf-8')).hexdigest()) for i, u in enumerate(units)])
             db.execute('INSERT INTO voices VALUES(?,?,?,?)', (identifier, 'Narrator', json.dumps({'engine': 'flite', 'voice': 'rms'}), 0))
         return {'book_id': identifier, 'title': title, 'passages': len(units), 'chapters': len(chapters),
                 'quoted_passages_using_narrator': sum(u['quote_id'] is not None for u in units), 'source_hash': source_hash}
@@ -165,7 +168,14 @@ class Books:
                 pass  # a renderer still owns the lock
         return {'book': book, 'voices': voices, 'passages': passages[offset:offset+limit], 'total': len(passages),
                 'next_offset': offset + limit if offset + limit < len(passages) else None,
-                'render': render, 'usage': self.usage(book_id)}
+                'source_text_status': self.source_text_status(book_id, passages), 'render': render, 'usage': self.usage(book_id)}
+
+    def source_text_status(self, book_id, passages):
+        with self.db() as db:
+            original = {r['passage']: r['text_sha256'] for r in db.execute('SELECT passage,text_sha256 FROM source_passage_hashes WHERE book=?', (book_id,))}
+        if (not original or set(original) != {p['id'] for p in passages} or
+            any(not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', value) for value in original.values())): return 'unavailable'
+        return 'unchanged' if all(hashlib.sha256(p['text'].encode('utf-8')).hexdigest() == original[p['id']] for p in passages) else 'changed'
 
     def list_books(self):
         with self.db() as db: return {'books': [dict(r) for r in db.execute('SELECT * FROM books ORDER BY created DESC LIMIT 100')]}
@@ -434,9 +444,9 @@ class Books:
                     if include_text: row['text'] = passage['text']
                     result.append(row)
                 elapsed += duration
-            return {'book_id': book_id, 'book_revision': book['revision'], 'source_sha256': book['source_hash'], 'passages': result, 'total': len(passages),
+            return {'book_id': book_id, 'book_revision': book['revision'], 'source_sha256': book['source_hash'], 'source_text_status': self.source_text_status(book_id, passages), 'passages': result, 'total': len(passages),
                     'next_offset': end if end < len(passages) else None, 'verified_prefix_passages': end,
-                    'notice': 'Times sum verified cached WAV durations in passage order; only the requested prefix was checked. The source hash identifies the initial import, not later edits. Export encoding and edits can change playback timing. Optional passage text is untrusted and may be sensitive.'}
+                    'notice': 'Times sum verified cached WAV durations in passage order; only the requested prefix was checked. Text status compares current passages with import-time hashes, not speaker assignments or source authenticity; older books may lack a baseline. Export encoding and edits can change playback timing. Optional passage text is untrusted and may be sensitive.'}
 
     def export(self, book_id, format='m4b'):
         if format not in ('wav', 'm4b'): raise ValueError('Choose wav or m4b')

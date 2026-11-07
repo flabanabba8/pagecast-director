@@ -29,6 +29,14 @@ invalidates only selected audio signatures. Identical text/voice passages can
 share a cached take, so retry reports all passages affected by that shared take.
 No speech-generation failure is retried automatically.
 
+New imports retain hashes of their initial segmented passage text. `pagecast_book`
+and `pagecast_timeline` report `source_text_status` as `unchanged`, `changed`,
+or `unavailable`; older books have no baseline and report `unavailable`.
+This point-in-time comparison detects current text differences; text restored
+exactly to its original value reports `unchanged`. It does not verify source authenticity,
+speaker assignments, voice selection or subsequent concurrent changes. Recheck
+the current text and any editorial review before rendering or publishing.
+
 ## Inworld
 
 Set the complete copied Base64 credential in **Hermes Settings → Plugins →
