@@ -21,6 +21,17 @@ TEXT = 'The observatory lights flickered.\n“Did you save the coordinates?”\n
 
 
 class ImportTests(unittest.TestCase):
+    def test_registered_handler_reads_keyed_config_without_secrets(self):
+        class Context:
+            def __init__(self): self.handlers = {}; self.keys = []
+            def get_config(self, key): self.keys.append(key); return {'higgs_model': 'fixture-model'}.get(key)
+            def register_tool(self, **kwargs): self.handlers[kwargs['name']] = kwargs['handler']
+        ctx = Context(); package.register(ctx)
+        with patch.object(package, 'invoke', return_value='{}') as call:
+            ctx.handlers['pagecast_books']({})
+        self.assertEqual(call.call_args.args[2], {'higgs_model': 'fixture-model'})
+        self.assertNotIn('inworld_api_key', ctx.keys)
+
     def test_source_text_status_tracks_edits_and_legacy_books(self):
         with tempfile.TemporaryDirectory(dir='/tmp') as tmp:
             books = Books(tmp); book_id = books.import_book(text='First line.\nSecond line.')['book_id']

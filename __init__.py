@@ -46,7 +46,10 @@ def invoke(name, args, settings=None):
 
 
 def register(ctx):
+    def settings():
+        keys = ('inworld_model', 'higgs_url', 'higgs_model', 'higgs_revision')
+        return {key: value for key in keys if (value := ctx.get_config(key)) is not None}
     for name, (description, properties, required) in TOOLS.items():
         ctx.register_tool(name=name, toolset='pagecast_director', schema={'name': name, 'description': description, 'parameters': {
             'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}},
-            handler=lambda args, _name=name, **kwargs: invoke(_name, args, ctx.get_config()))
+            handler=lambda args, _name=name, **kwargs: invoke(_name, args, settings()))

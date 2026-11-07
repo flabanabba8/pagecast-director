@@ -4,6 +4,7 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 
 ## Passed
 
+- Registered handlers read the declared non-secret settings through Hermes's keyed `get_config` interface; a strict-context regression checks forwarding and that the Inworld credential is not requested as ordinary configuration. Secrets remain in Hermes's scoped secret store.
 - New imports save per-passage text hashes. Synthetic checks cover unchanged text, speaker reassignment, edited text, exact restoration and missing, malformed or legacy baselines; the timeline reports the same status. A separate Linux PageCast-to-Podcast fixture rejects a changed handoff, and a native Windows text-only fixture checked unchanged, changed and unavailable states. The status is point-in-time and does not authenticate sources or speaker assignments; no provider request or playback was made for these checks.
 - A standalone headless browser fixture using the Desktop component, mock API responses and approximate theme variables was inspected at 1280 px and 375 px widths. No horizontal overflow was observed in the selected book state; a singular passage label and disabled-button appearance were corrected, and the Desktop flow test passed. This is not native Hermes Desktop, real service, accessibility-conformance or complete state coverage.
 
