@@ -42,6 +42,7 @@ export async function run(assert, document) {
     await change(field(document, 'Book title'), 'Original scene')
     await change(field(document, 'Chapter text'), '“A short original line.”')
     await act(async () => document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })))
+    assert.match(document.body.textContent, /1 passage · revision 1/)
     assert.equal(calls.filter(c => c.operation === 'pagecast_render').length, 0, 'Import must not synthesize speech')
     const passage = document.querySelector('[aria-label="Passages"] article')
     await change(field(passage, 'Speaker'), 'Mina'); await click('Assign speaker', passage)

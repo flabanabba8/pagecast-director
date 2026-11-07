@@ -4,7 +4,7 @@ import { createElement as h, useEffect, useId, useState } from 'react'
 const field = { padding: '8px 10px', border: '1px solid var(--ui-stroke-secondary)', borderRadius: 7, background: 'var(--ui-bg-tertiary)', color: 'var(--ui-text-primary)' }
 const card = { padding: 16, border: '1px solid var(--ui-stroke-secondary)', borderRadius: 12, display: 'grid', gap: 10 }
 const row = { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }
-const button = (text, onClick, disabled = false, props = {}) => h('button', { style: field, onClick, disabled, ...props }, text)
+const button = (text, onClick, disabled = false, props = {}) => h('button', { style: { ...field, opacity: disabled ? 0.5 : 1 }, onClick, disabled, ...props }, text)
 const label = (name, child) => h('label', { style: { display: 'grid', gap: 5 } }, name, child)
 
 function Voice({ name, spec, bookId, call, task, reload, busy }) {
@@ -88,7 +88,7 @@ function PageCast({ ctx }) {
       label('Allow selected books inside this profile’s plugin data', h('input', { type: 'checkbox', checked: allowProfileBooks, disabled: busy || !sourcePath.trim(), onChange: e => setAllowProfileBooks(e.target.checked) })),
       button('Import editable copy', undefined, busy || (!text.trim() && !sourcePath.trim()), { type: 'submit' }))),
     detail && h('section', { style: { display: 'grid', gap: 20 }, 'aria-label': 'Book editor' },
-      h('div', { style: card }, h('h2', null, detail.book.title), h('p', null, `${detail.total} passages · revision ${detail.book.revision}`),
+      h('div', { style: card }, h('h2', null, detail.book.title), h('p', null, `${detail.total} ${detail.total === 1 ? 'passage' : 'passages'} · revision ${detail.book.revision}`),
         h('p', { role: 'status' }, detail.render ? `${detail.render.state} · last run ${detail.render.done}/${detail.render.total}` : 'Ready to cast and render'),
         detail.usage?.requests > 0 && h('p', null, `Inworld: ${detail.usage.requests} requests · ${detail.usage.reported_characters} provider-reported characters · ${detail.usage.unknown_outcomes} unknown outcomes`),
         detail.render?.error && h('p', { role: 'alert' }, detail.render.error), notice && h('p', null, notice),
