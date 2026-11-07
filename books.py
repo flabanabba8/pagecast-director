@@ -259,7 +259,7 @@ class Books:
             value.update(model=model, sample_rate=24000, request_format='elevenlabs-pcm24k-v1')
         elif value['engine'] == 'gemini':
             model = self.settings.get('gemini_model', 'gemini-3.8-flash-tts')
-            if model not in hosted.GEMINI_MODELS: raise ValueError('Choose a supported Gemini speech model')
+            if not isinstance(model, str) or not hosted.GEMINI_MODEL.fullmatch(model): raise ValueError('Use a Gemini speech model ID such as gemini-3.8-flash-tts')
             value.update(model=model, sample_rate=24000, request_format='gemini-interactions-wav24k-v1')
         else:
             value.update(endpoint=self.settings.get('higgs_url', 'http://localhost:8000'), model=self.settings.get('higgs_model', 'bosonai/higgs-tts-3-4b'), revision=self.settings.get('higgs_revision', ''))

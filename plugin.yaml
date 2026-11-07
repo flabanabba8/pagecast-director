@@ -25,7 +25,7 @@ config_schema:
   elevenlabs_api_key: {type: secret, env: ELEVENLABS_API_KEY, required: false, label: "ElevenLabs API key", description: "Stored by Hermes, never in book data. Synthesis sends text to ElevenLabs and consumes your account credits."}
   elevenlabs_model: {type: str, default: "eleven_multilingual_v2", choices: [eleven_multilingual_v2, eleven_flash_v2_5, eleven_turbo_v2_5], description: "Hosted ElevenLabs model."}
   gemini_api_key: {type: secret, env: GEMINI_API_KEY, required: false, label: "Gemini API key", description: "Stored by Hermes, never in book data. Synthesis sends text to Google and may consume your quota or billing."}
-  gemini_model: {type: str, default: "gemini-3.8-flash-tts", choices: [gemini-3.8-flash-tts, gemini-3.8-flash-lite-tts, gemini-3.1-flash-tts-preview], description: "Hosted Gemini speech model."}
+  gemini_model: {type: str, default: "gemini-3.8-flash-tts", description: "Gemini speech model ID, for example gemini-3.8-flash-tts (current flagship per Google, 2026-11-07), gemini-3.8-flash-lite-tts or gemini-3.1-flash-tts-preview."}
   higgs_url: {type: str, default: "http://localhost:8000", description: "Already-running local Higgs TTS3 server origin."}
   higgs_model: {type: str, default: "bosonai/higgs-tts-3-4b", description: "Served local model identifier."}
   higgs_revision: {type: str, default: "", description: "Model revision used in audio cache identity; update when changing weights."}

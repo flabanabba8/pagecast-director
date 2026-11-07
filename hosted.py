@@ -10,7 +10,7 @@ import wave
 MAX_UNITS = 2000
 MAX_RESPONSE = 32 * 1024 * 1024
 ELEVEN_MODELS = ('eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_turbo_v2_5')
-GEMINI_MODELS = ('gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', 'gemini-3.1-flash-tts-preview')
+GEMINI_MODEL = re.compile(r'gemini-[0-9]+(?:\.[0-9]+)?-(?:flash-lite|flash|pro)(?:-preview)?-tts(?:-preview)?')
 
 
 class HostedError(RuntimeError):
@@ -105,7 +105,7 @@ def _audio_item(node):
 
 def gemini(text, voice, model='gemini-3.8-flash-tts', observe=None):
     check_text(text); valid_voice(voice, 'Gemini')
-    if model not in GEMINI_MODELS: raise ValueError('Choose a supported Gemini speech model: ' + ', '.join(GEMINI_MODELS))
+    if not isinstance(model, str) or not GEMINI_MODEL.fullmatch(model): raise ValueError('Use a Gemini speech model ID such as gemini-3.8-flash-tts')
     event = observe or (lambda *_: None)
     key = secret('GEMINI_API_KEY', 'Gemini')
     body = {'model': model, 'input': [{'type': 'user_input', 'content': [{'type': 'text', 'text': text}]}],

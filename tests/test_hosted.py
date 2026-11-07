@@ -91,6 +91,14 @@ class HostedTests(unittest.TestCase):
                 self.assertEqual(len(Connection.calls), 1)
                 self.assertEqual(books.usage(identifier)['requests'], 1)
 
+    def test_gemini_model_ids_follow_a_pattern_not_a_fixed_list(self):
+        for ok in ('gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', 'gemini-3.1-flash-tts-preview', 'gemini-2.5-pro-preview-tts', 'gemini-4-flash-tts'):
+            a, b = patched('x', 'fixture-key')
+            with a, b: hosted.gemini('Hello there.', 'Kore', ok)
+            self.assertEqual(Connection.calls[-1]['payload']['model'], ok)
+        for bad in ('gemini-3.8-flash', 'gpt-4o-tts', 'gemini-3.8-flash-tts/../x', ''):
+            with self.assertRaises(ValueError): hosted.gemini('Hello there.', 'Kore', bad)
+
     def test_set_voice_rejects_unknown_engine_and_references(self):
         with tempfile.TemporaryDirectory() as tmp:
             books = Books(tmp); identifier = books.import_book(text='Hello there.')['book_id']
