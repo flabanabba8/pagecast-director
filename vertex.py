@@ -1,8 +1,11 @@
-"""Vertex Gemini speech with ADC, persistent usage accounting and no POST retries."""
+"""Vertex Gemini speech with a Google sign-in held by Hermes, persistent usage accounting and no POST retries.
+
+The plugin never sees, stores or refreshes a Google token and reads no other tool's login (no gcloud file, no
+Application Default Credentials): plugin.yaml declares the user's own OAuth client under `oauth:` (id `google`),
+the user signs in once with `hermes auth add pagecast-director:google`, and Hermes signs each speech request."""
 import base64
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import lru_cache
 import json
 import re
 import time
@@ -30,23 +33,57 @@ def estimate_usd(text):
     return min(RESERVATION, max(MIN_RESERVATION, cost))
 
 
-@lru_cache(maxsize=1)
-def credentials():
-    import google.auth
-    return google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform'])[0]
+SIGN_IN = 'hermes auth add pagecast-director:google'
+SETUP = ('Vertex speech needs a one-time Google sign-in held by Hermes: create a Google Cloud OAuth client of type "Desktop app" '
+         'in your own project, put its id and secret in this Hermes profile (PAGECAST_GOOGLE_CLIENT_ID, PAGECAST_GOOGLE_CLIENT_SECRET), '
+         'set gemini_project, then run in a terminal: ' + SIGN_IN)
+
+
+class NotSent(RuntimeError):
+    """Hermes refused or could not sign the request, so nothing was sent to Google."""
+
+
+class _Response:
+    def __init__(self, status, content): self.status_code = status; self.content = content
+    def json(self): return json.loads(self.content)
+
+
+def sign_in_supported():
+    try:
+        from hermes_cli.plugin_provider_requests import credentialed_provider_request  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def signed_post(url, body, project, timeout=240.0):
+    """One POST signed by Hermes. Raises NotSent when nothing left this computer."""
+    try:
+        from hermes_cli.auth_constants import AuthError
+        from hermes_cli.plugin_provider_requests import ProviderNotSignedIn, credentialed_provider_request
+    except Exception:
+        raise NotSent('Vertex speech needs Hermes 0.22.3 or later with the plugin running inside Hermes; no speech POST sent') from None
+    try:
+        response = credentialed_provider_request('google', 'POST', url, json=body, headers={'x-goog-user-project': project}, timeout=timeout)
+    except ProviderNotSignedIn:
+        raise NotSent('Not signed in to Google through Hermes; no speech POST sent. ' + SETUP) from None
+    except AuthError as exc:
+        raise NotSent(f'Hermes could not use the Google sign-in ({getattr(exc, "code", "auth_error")}); no speech POST sent. ' + SETUP) from None
+    except PermissionError as exc:
+        raise NotSent(f'Hermes refused to sign this request ({str(exc)[:200]}); no speech POST sent') from None
+    return _Response(response.status, response.body)
 
 
 @contextmanager
 def session():
+    """Kept for callers that group a book's requests; Hermes owns the connection, so there is nothing to hold open."""
     current = _active.get()
     if current is not None:
         yield current
         return
-    import requests
-    with requests.Session() as client:
-        token = _active.set(client)
-        try: yield client
-        finally: _active.reset(token)
+    token = _active.set(True)
+    try: yield True
+    finally: _active.reset(token)
 
 
 def save(path, ledger):
@@ -93,38 +130,17 @@ def synthesize(text, voice, model, observe, *, project, ledger_path, max_usd=3):
                           f'{max_usd:g} USD. Raise the gemini_max_usd setting, or render fewer or shorter passages.')
     event = observe or (lambda *_: None)
     usage = {'reported_units': None, 'requested_utf16_units': len(text.encode('utf-16-le')) // 2, 'model_id': model, 'route': 'vertex'}
-    try:
-        from google.auth.transport.requests import Request
-        cred = credentials()
-        if not cred.valid: cred.refresh(Request())
-    except Exception:
-        event('not_sent', usage)
-        raise HostedError('Vertex ADC refresh failed before speech transmission; no POST sent') from None
     base = f'https://aiplatform.googleapis.com/v1/projects/{project}/locations/global/publishers/google/models/{model}:generateContent'
     body = {'contents': [{'role': 'user', 'parts': [{'text': text}]}], 'generationConfig': {
         'responseModalities': ['AUDIO'], 'speechConfig': {'voiceConfig': {'voice': voice}}}}
-    with session() as client:
-        headers = {'Authorization': 'Bearer ' + cred.token, 'x-goog-user-project': project}
-        if client.headers.get('x-goog-user-project') != project:
-            # Bounded unbilled connection setup only; the speech POST is never retried.
-            last_error = 'connection unavailable'
-            for attempt in range(2):
-                try:
-                    warm = client.head('https://aiplatform.googleapis.com/', headers={'User-Agent': 'PageCast-Director'}, timeout=(8, 8), allow_redirects=False)
-                    if warm.status_code not in (200, 404):
-                        last_error = 'HTTP ' + str(warm.status_code)
-                        continue
-                    break
-                except Exception as exc:
-                    last_error = type(exc).__name__
-            else:
-                event('not_sent', usage)
-                raise HostedError(f'Vertex connection preflight failed ({last_error}); no speech POST sent') from None
-            client.headers['x-goog-user-project'] = project
+    if True:
         row = {'started': time.time(), 'status': 'pending', 'reserved_or_actual_usd': estimate}
         ledger.append(row); save(ledger_path, ledger); event('pending', usage)
         try:
-            response = client.post(base, headers=headers, json=body, timeout=(60, 240), allow_redirects=False)
+            response = signed_post(base, body, project)
+        except NotSent as exc:
+            ledger.remove(row); save(ledger_path, ledger); event('not_sent', usage)
+            raise HostedError(str(exc)) from None
         except Exception:
             row['status'] = 'unknown'; save(ledger_path, ledger); event('unknown', usage)
             raise HostedError('Vertex transport failure; billed outcome unknown; no retry made') from None

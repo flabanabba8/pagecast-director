@@ -871,7 +871,7 @@ class Books:
                 'perform transcript/end/onset checks and preserve the source. pagecast_direct currently accepts Inworld markup only; '
                 'do not feed its bracketed directions to Higgs. Resolve the visible casting hold before rendering.')
         if 'gemini' in engines and self.settings.get('gemini_route') == 'vertex':
-            result['instructions'] += (' Vertex Gemini 3.8 uses global generateContent with ADC and the stored approved cast. '
+            result['instructions'] += (' Vertex Gemini 3.8 uses global generateContent with the Google sign-in Hermes holds and the stored approved cast. '
                 'The renderer sends unchanged source text without Inworld markup, accepts WAV directly and records actual text/audio token counts. '
                 'Never put identity instructions or legacy direction tags in source text.')
         return result

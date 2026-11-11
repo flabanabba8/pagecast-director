@@ -19,7 +19,7 @@ class ToolSmokeTests(unittest.TestCase):
         @contextmanager
         def session(): yield client
         with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), \
-                patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='fixture-token')):
+                patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False)):
             def call(name, **args):
                 result = json.loads(package.invoke(name, args, SETTINGS, tmp))
                 self.assertFalse(result.get('error'), (name, result))

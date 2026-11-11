@@ -30,7 +30,7 @@ class VertexTests(unittest.TestCase):
         client = Client()
         @contextmanager
         def session(): yield client
-        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='fixture-token')):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False)):
             books = Books(tmp, {'gemini_route': 'vertex', 'gemini_project': 'fixture-project', 'gemini_max_usd': 3})
             identifier = books.import_book(text='Hello there.')['book_id']
             books.set_voice(identifier, 'Narrator', engine='inworld', voice='Ashley')
@@ -67,7 +67,7 @@ class VertexTests(unittest.TestCase):
         self.assertLess(vertex.estimate_usd(short), 0.10)
         self.assertEqual(vertex.estimate_usd('Hi.'), vertex.MIN_RESERVATION)
         self.assertEqual(vertex.estimate_usd('x' * 100000), vertex.RESERVATION)
-        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='fixture-token')):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False)):
             ledger_path = Path(tmp) / 'u.json'
             audio, _ = vertex.synthesize(short, 'fixture_voice', 'gemini-3.8-flash-tts', None, project='fixture-project', ledger_path=ledger_path, max_usd=0.10)
             self.assertTrue(audio)
@@ -86,7 +86,7 @@ class VertexTests(unittest.TestCase):
         client = Client(); client.fail = True
         @contextmanager
         def session(): yield client
-        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='fixture-token')):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False)):
             books = Books(tmp, {'gemini_route': 'vertex', 'gemini_project': 'fixture-project'})
             identifier = books.import_book(text='Hello there.')['book_id']
             books.set_voice(identifier, 'Narrator', engine='gemini', voice='fixture_voice')
@@ -113,3 +113,26 @@ class VertexTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+
+class HermesSignInTests(unittest.TestCase):
+    """The plugin holds no Google credential: Hermes signs the request and no other tool's login is read."""
+    def test_not_signed_in_sends_nothing_and_keeps_no_ledger_row(self):
+        def refuse(*a, **k): raise vertex.NotSent('Not signed in to Google through Hermes; no speech POST sent. ' + vertex.SETUP)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'signed_post', refuse):
+            from pathlib import Path
+            ledger = Path(tmp) / 'vertex-usage.json'
+            with self.assertRaisesRegex(vertex.HostedError, 'hermes auth add pagecast-director:google'):
+                vertex.synthesize('Hello.', 'Kore', 'gemini-3.8-flash-tts', None, project='fixture-project', ledger_path=ledger)
+            self.assertEqual(json.loads(ledger.read_text()), [])
+
+    def test_outside_hermes_the_request_is_refused_before_sending(self):
+        with self.assertRaises(vertex.NotSent):
+            vertex.signed_post('https://aiplatform.googleapis.com/v1/x', {}, 'fixture-project')
+
+    def test_source_reads_no_other_tools_login(self):
+        from pathlib import Path
+        code = '\n'.join(l for l in Path(vertex.__file__).read_text().split('"""', 2)[2].splitlines())
+        for banned in ('google.auth', 'subprocess', 'application_default', '.refresh(', 'Bearer', 'import requests'):
+            self.assertNotIn(banned, code, banned)
+

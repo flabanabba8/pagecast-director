@@ -11,7 +11,7 @@ casting and direction; spoiler-safe progress keeps story details private.
 **At a glance**
 
 - **Install:** `hermes plugins install flabanabba8/pagecast-director`, then `hermes plugins enable pagecast-director`.
-- **Needs:** Hermes 0.22 or later; FFmpeg for M4B/WAV export. Speech: built-in Flite voices, or a Higgs server already running on your computer, or your own Inworld, ElevenLabs or Gemini account (keys stored by Hermes). The Android read-along app is optional.
+- **Needs:** Hermes 0.22.3 or later; FFmpeg for M4B/WAV export. Speech: built-in Flite voices, or a Higgs server already running on your computer, or your own Inworld, ElevenLabs or Gemini account (keys stored by Hermes). The Android read-along app is optional.
 - **Internet:** Nothing, unless you pick a hosted voice: then passage text and voice choices go to Inworld, ElevenLabs or Google (Gemini, developer key or your own Google Cloud login) and use your credits. The Android app tools can download the app from GitHub after you approve.
 - **Limits:** Linux is the only platform checked. The ElevenLabs and Gemini routes were tested against mocks, not live. Speaker attribution is yours to assign; the parser does not guess characters.
 - **Credits:** Optional voices come from the engines you choose (Flite, Higgs TTS 3, Inworld, ElevenLabs, Google Gemini); their terms apply to what you make. Licence: GPL-3.0-or-later.
@@ -354,9 +354,18 @@ read-along package was made from the accepted take without another synthesis.
 ### Gemini 3.8 on Vertex with stored designed voices
 
 Select `gemini_route: vertex` in the private Hermes plugin settings and configure
-`gemini_project` with your own Cloud project. Install Google ADC support
-(`google-auth` and `requests`) in the Hermes environment and configure your own
-Application Default Credentials. No project, token or credential is bundled.
+`gemini_project` with your own Cloud project. Since 0.3.5 the plugin does not read
+the `gcloud` login or any other tool's credential file and never sees or refreshes a
+Google token: Hermes holds the sign-in (catalog rule 11). One-time setup: enable the
+Vertex AI API and create an OAuth client of type "Desktop app" in your project; add it
+to this Hermes profile's `.env` as `PAGECAST_GOOGLE_CLIENT_ID` and
+`PAGECAST_GOOGLE_CLIENT_SECRET`; then run `hermes auth add pagecast-director:google`
+in a terminal (browser consent for the `cloud-platform` scope; the token goes only to
+`aiplatform.googleapis.com`). `hermes auth logout pagecast-director:google` removes it.
+Without the sign-in a Vertex request is refused before anything is sent. The Vertex
+route needs Hermes 0.22.3 or later and works only inside Hermes; the other hosts
+(Codex, Claude Code, Pi, the stand-alone server) use the Developer API key route.
+No project, token or credential is bundled.
 The default Developer API route remains available for existing users.
 
 Vertex sends unchanged source words through global `generateContent`, accepts WAV

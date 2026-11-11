@@ -79,7 +79,7 @@ TOOLS['pagecast_voice_audition'] = ('Hear candidate voices for one speaker witho
     'engine': {'type': 'string', 'enum': ['higgs', 'gemini'], 'description': 'Default higgs, or gemini when voices is given.'},
     'voices': {'type': 'array', 'minItems': 2, 'maxItems': 6, 'items': {'type': 'string'}, 'description': 'Gemini prebuilt voice names to audition, one line each.'}}, ['book_id', 'speaker'])
 
-TOOLS['pagecast_speech_options'] = ('Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured with application default credentials found, its spend guard, and for Gemini the 30 named prebuilt voices with Google\'s gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.', {}, [])
+TOOLS['pagecast_speech_options'] = ('Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured and Hermes sign-in support is present, its spend guard, and for Gemini the 30 named prebuilt voices with Google\'s gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.', {}, [])
 
 METHODS = {'pagecast_import': 'import_book', 'pagecast_books': 'list_books', 'pagecast_book': 'get', 'pagecast_voice': 'set_voice'}
 

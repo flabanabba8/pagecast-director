@@ -176,6 +176,6 @@ Inputs: `book_id` (required), `speaker` (required), `candidates` (optional), `te
 
 ## pagecast_speech_options
 
-Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured with application default credentials found, its spend guard, and for Gemini the 30 named prebuilt voices with Google's gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.
+Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured and Hermes sign-in support is present, its spend guard, and for Gemini the 30 named prebuilt voices with Google's gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.
 
 Inputs: .

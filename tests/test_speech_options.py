@@ -20,9 +20,9 @@ class SpeechOptionsTests(unittest.TestCase):
         result = speech_options.speech_options({'higgs_url': 'http://localhost:9'})
         self.assertFalse(result['higgs']['reachable']); self.assertFalse(result['gemini']['configured']); self.assertNotIn('voices', result['gemini'])
     def test_configured_vertex_route_lists_voices_and_never_prints_the_project(self):
-        with patch.object(vertex, 'credentials', return_value=object()):
+        with patch.object(vertex, 'sign_in_supported', return_value=True):
             result = speech_options.speech_options({'gemini_route': 'vertex', 'gemini_project': 'secret-project-id', 'gemini_max_usd': 0.5, 'higgs_url': 'http://localhost:9'})
-        self.assertTrue(result['gemini']['configured']); self.assertTrue(result['gemini']['application_default_credentials_found']); self.assertEqual(len(result['gemini']['voices']), 30)
+        self.assertTrue(result['gemini']['configured']); self.assertTrue(result['gemini']['hermes_sign_in_supported']); self.assertEqual(len(result['gemini']['voices']), 30)
         self.assertNotIn('secret-project-id', str(result))
     def test_tool_is_registered(self):
         self.assertIn('pagecast_speech_options', module.TOOLS); self.assertIn('pagecast_speech_options', (root / 'plugin.yaml').read_text())

@@ -113,7 +113,7 @@ class EngineHonestyTests(unittest.TestCase):
     def patches(self, client):
         @contextmanager
         def session(): yield client
-        return patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='fixture-token'))
+        return patch.object(vertex, 'session', session), patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False))
 
     def test_render_states_engine_voice_and_billing_and_cached_reuse(self):
         client = Client(); a, b = self.patches(client)
@@ -165,7 +165,7 @@ class PreviewTests(unittest.TestCase):
         def session(): yield client
         books, book = fixture(tmp, 'One line.')
         books.set_voice(book, 'Narrator', engine='gemini', voice='Kore')
-        with patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='t')):
+        with patch.object(vertex, 'session', session), patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False)):
             result = books.render(book); self.assertEqual(result['state'], 'complete', result)
         return books, book
 
@@ -202,7 +202,7 @@ class GeminiAuditionTests(unittest.TestCase):
         self.client = Client()
         @contextmanager
         def session(): yield self.client
-        self.patches = [patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='t')), patch.object(voice_audition, 'PAUSE_SECONDS', 0)]
+        self.patches = [patch.object(vertex, 'session', session), patch.object(vertex, 'signed_post', lambda url, body, project, timeout=240.0, _c=self.client: _c.post(url, headers={'x-goog-user-project': project}, json=body, allow_redirects=False)), patch.object(voice_audition, 'PAUSE_SECONDS', 0)]
         for p in self.patches: p.start()
     def tearDown(self):
         for p in self.patches: p.stop()

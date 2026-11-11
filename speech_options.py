@@ -22,12 +22,9 @@ def _higgs(settings):
 def _gemini(settings):
     route, model = settings.get('gemini_route', ''), settings.get('gemini_model', 'gemini-3.8-flash-tts')
     configured = route == 'vertex' and bool(settings.get('gemini_project'))
-    adc = None
-    if route == 'vertex':
-        try: vertex.credentials(); adc = True
-        except Exception: adc = False
+    signin = vertex.sign_in_supported() if route == 'vertex' else None
     out = {'configured': configured, 'route': route or None, 'model': model, 'project_configured': bool(settings.get('gemini_project')),
-           'spend_guard_usd': settings.get('gemini_max_usd', 3), 'application_default_credentials_found': adc}
+           'spend_guard_usd': settings.get('gemini_max_usd', 3), 'hermes_sign_in_supported': signin, 'sign_in': ('Hermes holds the Google sign-in; if a request reports "not signed in", run: ' + vertex.SIGN_IN) if route == 'vertex' else None}
     if configured:
         out['voices'] = [{'voice': n, 'gender': g, 'trait': t, 'median_pitch_hz': hz} for n, g, t, hz in GEMINI_VOICES]
         out['how_to_cast'] = 'Named voices are fixed: the same name sounds the same on every request, so no reference clip is needed. Give each speaker one name that fits (gender and trait from this list) and keep the three speakers median pitches at least 20 percent apart (the narrator clearly apart from the characters, e.g. a different gender or a clearly different pitch), lock it with pagecast_voice (engine gemini, voice = the name), and use it for every passage of that speaker. Gender and trait are Google\'s labels; this tool did not listen to them.'
