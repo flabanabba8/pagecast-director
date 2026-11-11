@@ -3,5 +3,6 @@
   "label": "PageCast Director",
   "version": "0.3.2",
   "description": "Edit book passages and casting, render changed speech, and export chaptered audiobooks.",
+  "tab": {"hidden": true},
   "api": "plugin_api.py"
 }

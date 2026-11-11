@@ -349,7 +349,8 @@ directly and does not send Inworld performance markup. Cache identity includes
 the route and project so artifacts from another route are not reused. The
 `gemini_max_usd` setting defaults to a conservative USD 3 per-book spending guard:
 usage is recorded privately at full list rates and uncertain requests retain a
-maximum reservation. Promotional credits are not assumed. This is a local guard,
+maximum reservation. Each speech request reserves about USD 0.31 before it runs,
+so a guard below that blocks every render; use 0.35 or more. Promotional credits are not assumed. This is a local guard,
 not an account invoice. Failed or uncertain speech calls are never retried
 automatically. Export and Android read-along import use the existing workflow.
 
