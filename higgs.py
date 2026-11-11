@@ -25,7 +25,12 @@ def endpoint(base):
     return base.rstrip('/') + '/v1/audio/speech'
 
 
+BANNED_CONTROLS = ('<|prosody:long_pause|>', '<|prosody:speed_slow|>', '<|prosody:speed_very_slow|>', '<|style:whispering|>')
+
+
 def synthesize(base, model, text, voice, reference_audio='', reference_text=''):
+    if any(tag in text.lower() for tag in BANNED_CONTROLS):
+        raise ValueError('Higgs control rejected before transmission: long_pause, forced slow delivery and whispering are forbidden')
     url = endpoint(base)
     payload = {'model': model, 'input': text, 'voice': voice, 'response_format': 'wav', 'stream': False,
                'temperature': .8, 'top_k': 50, 'top_p': .8, 'max_new_tokens': 2048}

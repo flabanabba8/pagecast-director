@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "pagecast-director",
+  "version": "0.3.2",
+  "description": "Spoiler-safe cast audiobooks using your current harness model, with Inworld TTS-2 and offline PageCast Android read-along.",
+  "license": "GPL-3.0-or-later",
+  "author": {
+    "name": "PageCast contributors"
+  }
+}

@@ -1,0 +1,151 @@
+{
+  "curated": "2026-11-10",
+  "status": "source-derived, not a new live verification",
+  "sources": [
+    {
+      "package_path": "README.md",
+      "sha256": "c68e7f9ef183fc6974739f5e80b3a6ffda0f570d8281c43a0e828d31de875e8b"
+    },
+    {
+      "package_path": "VERIFICATION.md",
+      "sha256": "8263dd90f40d7cf4e3a1dfc9f22ef6b1e02c2f1f1be8532c96420d8891d6e7f3"
+    },
+    {
+      "package_path": "__init__.py",
+      "sha256": "571fe4451a7843dc938ee2b0c0598802415eadf85946bbaf0a82e90ec989eb5d"
+    },
+    {
+      "package_path": "adapters/configure.py",
+      "sha256": "a1f51af4e58152f2355ed3c62dbd6e7dd4f41d3ae92f997f0d63b5c49e3539f5"
+    },
+    {
+      "package_path": "android_app.py",
+      "sha256": "2aba85ea9d10a3bb7299a431ff9ea7308f4bc96e65f10e896bb1425c34e93612"
+    },
+    {
+      "package_path": "books.py",
+      "sha256": "e0985eda98a291c1eee52b928f4ef70207633a79dfb8efdceb104d4891597e7c"
+    },
+    {
+      "package_path": "credentials.py",
+      "sha256": "251823fd88b235dd78c3131b7936934baab4e4c13f98b5c529b9bd68da027e58"
+    },
+    {
+      "package_path": "dashboard/plugin_api.py",
+      "sha256": "6a684e77248deb0c9c7307b0b9c1f0f2e7942646f3143e6934d8dd3f4ea42b0e"
+    },
+    {
+      "package_path": "higgs.py",
+      "sha256": "9682dafcc1906c0b73206435d833e4f259c4fef3fdbf3622452f6884388e46e8"
+    },
+    {
+      "package_path": "host_speech.py",
+      "sha256": "abb9a06a1fbc3a3cd1e500e178ae1c6e5962f3be7caa92041815fd5eb31990e7"
+    },
+    {
+      "package_path": "hosted.py",
+      "sha256": "b57e9ac79c2d06e490fee3156592d98ab27f3220c3f58877dcc07046bf4577d2"
+    },
+    {
+      "package_path": "importers.py",
+      "sha256": "9ad77916181507d0e151be9b93c69197efed91f74fd1ed86beb43761bbc22715"
+    },
+    {
+      "package_path": "inworld.py",
+      "sha256": "bf3cfa1139a7e8492cca82f75d3b6667a59e4f89c2f79dbf4aed004e04b70b15"
+    },
+    {
+      "package_path": "knowledge.py",
+      "sha256": "f014386b9cefa0c6b73e4ec5682ce9b6d354bf5399ad3fbf5286847e3de728c5"
+    },
+    {
+      "package_path": "locking.py",
+      "sha256": "202a1dd8ae71120c2ed49ec41c03ea0294bcf3ec06526138e5c3ee8c57a2cb08"
+    },
+    {
+      "package_path": "loopback.py",
+      "sha256": "9b15147744b87c327206a21acf0bfc6958dd5d71b1daaa0185ed3a3acc147042"
+    },
+    {
+      "package_path": "plugin.yaml",
+      "sha256": "e5387d81f40232cb7ef95bd4e90f064c46007b4218055e84c815d52e7d0bfd48"
+    },
+    {
+      "package_path": "process_env.py",
+      "sha256": "f8fcf92fbb4cd83ebaaa89b42b240709a0619d4f380cce82dd4f8ff42bcdfafa"
+    },
+    {
+      "package_path": "readalong.py",
+      "sha256": "4be6e7c88f17f3b60200690f2a9a3cac14f68658e1bbeced605186f772c06c1e"
+    },
+    {
+      "package_path": "reference_paths.py",
+      "sha256": "d0d53a5c422b2cf697ad4b2b8b1371d1a0ff673a9585700d82e981a55d07bf19"
+    },
+    {
+      "package_path": "server.py",
+      "sha256": "d3810087c6463e1d313cd19dbfb1909f2b5b65f72e30d6673ec8c222bd1c971d"
+    },
+    {
+      "package_path": "skills/pagecast-director/SKILL.md",
+      "sha256": "7b99a5f925b3896c0aea70838e74b91b5cd747a8acdaf956d0587fd93fdc5409"
+    },
+    {
+      "package_path": "speech_options.py",
+      "sha256": "f6723a0597e34e08b1068a29fb03ba4cafa38d25b9351116a047821676a3d564"
+    },
+    {
+      "package_path": "vertex.py",
+      "sha256": "9dc13fd0124d3f9d662a7ced4d7c93018929cc689ee78197a4e4d4be952f13c5"
+    },
+    {
+      "package_path": "voice_audition.py",
+      "sha256": "52c6bea5263ce680176f021c6dcbfa2c7da91a57aa19cc0dfe225624f240ec3b"
+    }
+  ],
+  "credentials_or_private_installations_read": false,
+  "primary_refresh": [
+    {
+      "url": "https://developers.openai.com/api/docs/guides/text-to-speech",
+      "checked": "2026-11-09",
+      "claim": "Legacy Speech API model retirement and different Realtime migration workflow"
+    },
+    {
+      "url": "https://github.com/KittenML/KittenTTS",
+      "checked": "2026-11-09",
+      "claim": "Legacy ONNX variants vs KittenTTS 2, resource/runtime and license distinctions"
+    }
+  ],
+  "quality_review": {
+    "date": "2026-11-09",
+    "method": "main-session source review; schema registration only, no business handlers or new live tests",
+    "references": [
+      {
+        "package_path": "README.md",
+        "sha256": "e9ea528c77c8d51e49c43b62e4b41313ae8653bcdfb8c49339e0ebfda1503faa"
+      },
+      {
+        "package_path": "plugin.yaml",
+        "sha256": "55a0a5e840264eb7a226c81683a7349d510413117983d93503e32516b96e87ee"
+      },
+      {
+        "package_path": "llmwiki/task-guide.md",
+        "sha256": "17647edc07d46509b4c838a77318039318014592951a2be1fc174a4162f0963a"
+      },
+      {
+        "package_path": "llmwiki/contracts.json",
+        "sha256": "289ab54b973bfadf31fff9b11a92b9ac5b28af429999880d3777669b74cf25e4"
+      }
+    ],
+    "scope": [
+      "setup decisions",
+      "worked task flow",
+      "failure diagnosis",
+      "acceptance limits",
+      "actual tool schema alignment",
+      "startup discovery",
+      "local reference resolution"
+    ],
+    "voice_audition_0_3_1": "2026-11-10: pagecast_voice_audition added (additive); offline stub-server tests only; pitch is a rough measure, not a listening review"
+  }
+}

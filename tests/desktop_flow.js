@@ -13,8 +13,10 @@ export async function run(assert, document) {
   const ctx = { register: c => contributions.push(c), rest: async (_, { body }) => {
     calls.push(body)
     switch (body.operation) {
+      case 'pagecast_series_list': return { series: [] }
       case 'pagecast_books': return { books: imported ? [detail.book] : [] }
       case 'pagecast_import': imported = true; return { book_id: detail.book.id }
+      case 'pagecast_overview': { const safe = copy(detail); delete safe.passages; delete safe.next_offset; return safe }
       case 'pagecast_book': return copy(detail)
       case 'pagecast_edit': detail.passages[0].text = body.arguments.text; detail.source_text_status = 'changed'; return {}
       case 'pagecast_assign': detail.passages[0].speaker = body.arguments.speaker; detail.voices[body.arguments.speaker] = { engine: 'flite', voice: 'rms', locked: false }; return {}
@@ -46,6 +48,17 @@ export async function run(assert, document) {
     assert.match(document.body.textContent, /1 passage · revision 1/)
     assert.match(document.body.textContent, /Passage text matches the imported text/)
     assert.equal(calls.filter(c => c.operation === 'pagecast_render').length, 0, 'Import must not synthesize speech')
+    assert.equal(document.querySelector('[aria-label="Passages"]'), null, 'Story text must not open by default')
+    assert.equal(calls.filter(c => c.operation === 'pagecast_book').length, 0, 'Overview must not request story text')
+    detail.render_block = { reason: 'Two voices need casting', pending_count: 2 }
+    detail.usage.vertex = { available: true, input_tokens: 12, output_tokens: 50 }
+    await click('Original scene', document.querySelector('[aria-label="Book library"]'))
+    assert.match(document.body.textContent, /Two voices need casting/)
+    assert.match(document.body.textContent, /12 text input tokens.*50 audio output tokens/)
+    assert.ok([...document.querySelectorAll('button')].find(e => e.textContent === 'Render changed passages').disabled)
+    delete detail.render_block
+    await click('Original scene', document.querySelector('[aria-label="Book library"]'))
+    await click('Open script and casting editor (contains story text)')
     const passage = document.querySelector('[aria-label="Passages"] article')
     await change(field(passage, 'Passage text'), 'A revised fictional line.'); await click('Save text', passage)
     assert.match(document.querySelector('[role=alert]').textContent, /Passage text differs from the import/)
@@ -73,5 +86,5 @@ export async function run(assert, document) {
     await act(async () => document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })))
     assert.equal(calls.filter(c => c.operation === 'pagecast_import').at(-1).arguments.allow_profile_books, true)
   } finally { await act(async () => root.unmount()) }
-  return { passed: true, checks: ['import without synthesis', 'profile book opt-in', 'speaker assignment', 'explicit Inworld choice', 'voice catalog', 'manual voice lock', 'explicit render', 'chaptered export', 'timer cleanup'] }
+  return { passed: true, checks: ['import without synthesis', 'uncast hold blocks render', 'reported Vertex tokens', 'profile book opt-in', 'speaker assignment', 'explicit Inworld choice', 'voice catalog', 'manual voice lock', 'explicit render', 'chaptered export', 'timer cleanup'] }
 }

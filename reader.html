@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src blob:; connect-src 'none'">
+<title>PageCast Read Along</title>
+<style>body{font:1.2rem/1.7 system-ui;background:#14181d;color:#edf1f5;max-width:48rem;margin:auto;padding:1rem}header{position:sticky;top:0;background:#14181d;padding:.5rem;z-index:1}audio{width:100%}button,input,select{font:inherit;max-width:100%}p{padding:.5rem;border-radius:.4rem;cursor:pointer}.active{background:#29384c}mark{background:#f5d889;color:#101010}label{display:block}small{color:#c1ccd8}</style>
+<header><h1 id="title"></h1><label>Choose the extracted audiobook.m4b <input id="file" type="file" accept="audio/*,.m4b,.m4a"></label>
+<audio id="audio" controls preload="metadata"></audio><label>Speed <select id="speed"><option>.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label>
+<label><input id="follow" type="checkbox" checked> Follow the reading</label><label>Chapter <select id="chapters"></select></label><small id="status" role="status">Choose audio, then press Play. Tap any passage to seek.</small></header>
+<main id="text"></main><p id="credit"></p>
+<script>
+const book=/*BOOK_DATA*/null;
+const audio=document.getElementById('audio'), status=document.getElementById('status'), chapters=document.getElementById('chapters');
+document.getElementById('title').textContent=book.title; document.getElementById('credit').textContent=book.credit;
+const key='pagecast:'+book.book_id+':'+book.revision;
+let saved=0;try{saved=Number(localStorage.getItem(key))||0}catch{}
+let url,active=-1,lastWord=-1,lastSave=0;
+const nodes=book.passages.map((p,i)=>{const n=document.createElement('p');n.textContent=p.text;n.tabIndex=0;n.title=p.speaker;
+const seek=()=>{if(audio.src)audio.currentTime=p.start};n.onclick=seek;n.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();seek()}};
+document.getElementById('text').append(n);if(i===0||p.chapter!==book.passages[i-1].chapter){const o=document.createElement('option');o.value=p.start;o.textContent=p.chapter;chapters.append(o)}return n});
+document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(f);audio.src=url;status.textContent='Ready. Passage highlighting is used where matching word timing is unavailable.'};
+audio.onloadedmetadata=()=>{if(saved>0&&saved<audio.duration)audio.currentTime=saved};
+audio.onerror=()=>{status.textContent='The browser could not play this file. Choose the extracted audiobook.m4b in Chrome or Firefox.'};
+document.getElementById('speed').onchange=e=>audio.playbackRate=Number(e.target.value);
+chapters.onchange=e=>{if(audio.src)audio.currentTime=Number(e.target.value)};
+function update(){const t=audio.currentTime;let lo=0,hi=book.passages.length;while(lo<hi){const m=(lo+hi)>>1;if(book.passages[m].end<=t)lo=m+1;else hi=m}
+const i=lo<book.passages.length&&book.passages[lo].start<=t?lo:-1;
+if(i!==active){if(active>=0){nodes[active].classList.remove('active');nodes[active].textContent=book.passages[active].text}active=i;lastWord=-1;if(i>=0){nodes[i].classList.add('active');if(document.getElementById('follow').checked)nodes[i].scrollIntoView({block:'center',behavior:'smooth'})}}
+if(i>=0){const p=book.passages[i],w=p.words.findIndex(w=>w.start<=t-p.start&&t-p.start<w.end);if(w!==lastWord){lastWord=w;nodes[i].textContent='';if(w<0)nodes[i].textContent=p.text;else{const s=p.words[w],m=document.createElement('mark');m.textContent=p.text.slice(s.from,s.to);nodes[i].append(document.createTextNode(p.text.slice(0,s.from)),m,document.createTextNode(p.text.slice(s.to)))}}}
+if(Date.now()-lastSave>2000){try{localStorage.setItem(key,String(t))}catch{}lastSave=Date.now()}}
+audio.ontimeupdate=update;audio.onseeked=update;
+function frame(){if(!audio.paused)update();requestAnimationFrame(frame)}requestAnimationFrame(frame);
+</script></html>

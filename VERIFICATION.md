@@ -75,3 +75,91 @@ Development checks on 2026-11-06. No publication; bounded live Inworld synthesis
 - ElevenLabs (`pcm_24000`) and Gemini (Interactions API, WAV 24 kHz) engines were added beside Inworld. Six mock-transport tests cover request shape, auth header placement, audio extraction, no-retry on error, limits checked before credentials, per-engine render/cache/usage and rejection of unknown engines. The Desktop flow test still passes. No live ElevenLabs or Gemini request, listening review or Windows run has been done; request shapes follow vendor docs read on 2026-11-07 and may drift.
 - 2026-11-07: the Gemini engine accepts any Gemini speech model ID matching the vendor naming pattern (default gemini-3.8-flash-tts, the current flagship on Google's models page; 3.8-flash-lite, 3.1-flash-tts-preview and 2.5 IDs also pass) instead of a fixed list; 36 tests pass. No Gemini key is configured in Hermes here, so no live Gemini request has been made.
 - 2026-11-07: Inworld returned HTTP 402 during a demo render and again on a one-word probe; the error text for 402 now says the account is probably out of credits or over its billing limit (Inworld and the ElevenLabs/Gemini client). A test covers it. 37 tests pass.
+
+## 2026-11-08: Android read-along, harness adapters and spoiler-safe casting
+
+- Shared engine: 51 Python tests passed across the standard-library run and the
+  two Hermes-runtime dashboard/secret-scope checks. Covers native provider
+  request mappings, bounded validation, selective cache identity, revision-checked
+  performance scripts, IPA, named pronunciation settings, escaped portable HTML,
+  package export without synthesis, spoofed/normalized word fallback, UTF-16
+  offsets, opaque roles, legacy-role masking, private notes and reveal boundaries.
+- Desktop React flow and offline-reader checks passed with the existing Hermes
+  development dependencies. The default overview requests no passage text;
+  opening the script is explicit. No new JavaScript dependency was installed.
+- Android: 143 JVM tests passed. The app built as 0.2.2-dev-canary, versionCode 4,
+  and was installed over the existing Canary app, preserving its data. A focused
+  on-device test passed on the connected Samsung phone: local AAC playback,
+  source-word timing, passage fallback, seeking, speed and resume with both the
+  TTS-direction callback and text-analysis callback set to fail if called. The
+  installed app also imported a PC-exported sample through the normal document
+  picker and displayed/played its text and audio. The regular app was subsequently updated to 0.2.2-dev with its library present.
+- MCP stdio initialization, discovery, tool calls, errors and clean shutdown were
+  exercised in a subprocess without Hermes or LLM credentials. Pi 1.5.0 connected
+  to all 19 tools; its native extension registered the shared runtime. OpenCode
+  2.1.4 connected through an isolated global configuration. Its project-only
+  listing did not discover an untrusted temporary project's configuration.
+- Claude Code 2.1.319 manifest validation passed (a public-directory icon remains
+  a release-time listing requirement). Codex 0.167.0 recognized Director 0.2.0 as
+  available from the local PageCast marketplace; it was not globally enabled.
+  Native Hermes retains profile-scoped secrets, storage and Desktop routing.
+- No cross-harness LLM provider was called for these checks. Subscription limits,
+  available model authentication and full clean-install flows on all platforms
+  remain release-target checks; Director does not extract or proxy login tokens.
+- One bounded live Inworld attempt failed during TLS connection setup, before
+  an HTTP synthesis request was sent (`not_sent`, no unknown billed outcome).
+  No automatic synthesis retry occurred. Independent HTTPS worked and DNS agreed
+  with a public resolver, but Inworld TLS remained unreliable from this PC.
+  Real TTS-2 audio quality, provider word accuracy and the account balance were
+  not validated in this session. Mock tests do not establish those properties.
+- No repository push, public package upload or release was performed. Public
+  publication still requires the user's full credentials/personal-config audit.
+
+### Follow-up: successful paid synthesis and connection handling
+
+After the user rotated the credential and explicitly requested a paid test,
+TLS-only changes and a curl attempt still failed before HTTP transmission; these
+failures are retained as `not_sent`. A verified TLS 1.2 connection retaining TCP
+buffering then completed one Inworld TTS-2 synthesis (Ashley): 93 processed
+characters, 4.37 seconds of normalized WAV and decoded/verified M4B. The three
+earlier connection attempts sent no synthesis request. No synthesis retry was
+made after a sent request. The new key was stored through Hermes credential
+lifecycle, not in source, book data or test receipts.
+
+The installed provider transport subsequently passed an authenticated read-only
+HTTPS request. It now bounds pre-HTTP connection retries to three; certificate
+errors and potentially billed request failures are not retried. Tests cover this
+boundary and preserve certificate/hostname validation. Networking can still fail
+when a route or provider is unavailable; the client reports that outcome.
+
+Actual provider alignment included the silent instruction token, whitespace
+tokens and a trailing empty token. Mapping was corrected against that response,
+then the accepted audio was reused with network calls prohibited. The resulting
+read-along has one word-timed passage. No replacement take was generated. Both
+the M4B and read-along ZIP were copied to the phone Downloads folder. Audio format,
+provider usage and timing structure were verified; subjective listening quality
+and the account balance were not independently evaluated.
+
+The regular app and Canary are both installed as development version 0.2.2,
+versionCode 4; the regular app retains four visible library metadata entries.
+The PageCast Orca workspace contains the Android sources/APKs, Desktop component,
+shared engine, five harness integrations and private local marketplace metadata.
+No public release or repository push occurred.
+
+## Skill and wiki text, 2026-11-10
+
+The skill gained a first-time local-speech-server path (one built-in voice plus one
+voice per reference sample; reference transcripts describe the sample, not the
+chapter) and a phone step covering the two Android tools. Text only; no code or tests
+changed and no speech was generated by this edit. Contracts and tools pages list all
+27 tools.
+
+## 0.3.1 voice audition — 2026-11-10
+
+- Why: a first-time audiobook run cast the Narrator on the speech server's built-in voice with no reference, and Higgs invented a new voice on every request (median pitch of six Narrator passages 90-185 Hz); a gruff man was given a woman's reference clip. New additive tool `pagecast_voice_audition` (voice_audition.py) asks the server for several neutral takes with no reference, measures each (length, median pitch by autocorrelation, loudness; no model) and keeps them in the book folder; the agent locks the fitting one with `pagecast_voice`. The skill and llmwiki now require a locked reference for every speaker and casting that fits the character.
+- Tests: three offline tests with a local stub server (pitch within 5 percent of known tones, no reference sent, files and measurements kept, bad arguments refused, registration). 77 tests pass. Pitch is a rough guide, not a listening review; whether a real invented voice sounds like a gruff man is checked only by the demo run.
+
+## 0.3.2 speech options — 2026-11-10
+
+- New read-only tool `pagecast_speech_options` (speech_options.py): reports whether a local Higgs server answers, whether Gemini (Vertex) is configured with application default credentials found and its spend guard, and the 30 prebuilt Gemini voices with Google's gender and trait labels (from the archived Google Cloud Gemini-TTS pages, 2026-11-08). It shows no credential or project value and spends nothing. Four offline tests; the skill and llmwiki now say how to cast by named voice. Labels are vendor claims, not a listening review. Plugin tests pass.
+- Voice pitches in pagecast_speech_options are one measured neutral sentence per prebuilt voice (13+30 requests, recorded Vertex cost about 0.10 USD in total, 2026-11-10): rough, not a listening review.

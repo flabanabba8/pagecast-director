@@ -18,7 +18,7 @@ class HostedError(RuntimeError):
 
 
 def secret(name, label):
-    from agent.secret_scope import get_secret
+    from .credentials import get_secret
     value = get_secret(name) or ''
     if not isinstance(value, str): raise ValueError(label + ' credential must be configured through Hermes secret settings')
     value = value.strip()
