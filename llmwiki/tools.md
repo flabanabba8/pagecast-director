@@ -74,7 +74,7 @@ Inputs: `book_id` (required), `passage_ids` (required), `speaker` (required).
 
 ## pagecast_voice
 
-Set and lock a speaker voice. Flite is local; Higgs uses your configured loopback server/reference. Inworld uses hosted TTS-2 and your Hermes-held API credential; synthesis consumes credits and sends passage text/voice IDs to Inworld. Never replace a locked voice without an explicit user-requested change.
+Set and lock a speaker voice. Flite is local; Higgs uses your configured loopback server/reference. Inworld uses hosted TTS-2 and your Hermes-held API credential; synthesis consumes credits and sends passage text/voice IDs to Inworld. Never replace a locked voice without an explicit user-requested change: replace_locked=true on a voice that would really change always asks the user for approval (naming the character, the locked voice and the new one) and is refused without it; when nothing would change the result says lock kept.
 
 Inputs: `book_id` (required), `speaker` (required), `engine` (optional), `inworld_options` (optional), `voice` (optional), `reference_audio` (optional), `reference_text` (optional), `locked` (optional), `replace_locked` (optional), `direction` (optional).
 
@@ -86,9 +86,9 @@ Inputs: `book_id` (required), `passage_id` (required), `text` (required).
 
 ## pagecast_render
 
-Render a bounded batch of missing passages; reuse unchanged audio. Call again to resume a partial book. Stops on provider failure or cast/text revision change; no automatic generation retries.
+Render a bounded batch of missing passages; reuse unchanged audio. Call again to resume a partial book. Stops on provider failure or cast/text revision change; no automatic generation retries. Renders with the engine and voice each speaker is CAST with (the Narrator defaults to local Flite until recast); it never substitutes another engine. The result states speech_used (engine, voice, model per group, generated vs cached) and whether anything was billed: repeat speech_summary, never describe a take otherwise. When the user asked for a specific engine or voice (for example a Gemini voice), pass engine/voice: the call is refused, with options, if the cast does not match.
 
-Inputs: `book_id` (required), `max_segments` (optional).
+Inputs: `book_id` (required), `max_segments` (optional), `engine` (optional), `voice` (optional).
 
 ## pagecast_cancel
 
@@ -98,9 +98,9 @@ Inputs: `book_id` (required).
 
 ## pagecast_preview
 
-Play only an already-rendered passage in audio-only mpv on the Hermes host. Use only when the user requests a preview. Does not regenerate speech or open a video window.
+Locate an already-rendered passage and say which engine and voice made it. By default NOTHING is played: it returns the audio file path. Set play=true only when the user asked to hear it on the Hermes computer; that starts audio-only mpv (and asks the user for approval). Never regenerates speech, never bills.
 
-Inputs: `book_id` (required), `passage_id` (required).
+Inputs: `book_id` (required), `passage_id` (required), `play` (optional).
 
 ## pagecast_retry
 
@@ -170,13 +170,12 @@ Inputs: `readalong_path` (optional), `update` (optional).
 
 ## pagecast_voice_audition
 
-For a reference-based speech server (Higgs): ask it for a few short takes of one neutral sentence with NO reference (each request invents a different voice), measure each take without any model (length, median pitch, loudness), and keep them all in the book folder. Use it when a speaker (the Narrator included) has no reference clip, then pick the candidate that fits the character and lock it with pagecast_voice (reference_audio = the candidate path, reference_text = its exact text). Candidates are auditions, not rerolls of book lines; nothing is assigned or locked. Pitch is a rough guide to how a voice sounds, not a listening review.
+Hear candidate voices for one speaker without touching the book. engine higgs (default): a reference-based speech server gives a few short takes of one neutral sentence with NO reference (each request invents a different voice), measured without any model (length, median pitch, loudness); pick one and lock it with pagecast_voice (reference_audio = the candidate path, reference_text = its exact text). engine gemini (or just pass voices): one short line per named Gemini voice on the configured route (2 to 6 voices, e.g. Leda and Kore), under the same spend guard as rendering; results list engine, voice, model, seconds and cost estimate and say they were billed. Auditions are not book lines or rerolls; nothing is assigned or locked and nothing is added to the book. Gemini auditions are PAID: only run them when the user asked to hear voices. Pitch is a rough guide, not a listening review.
 
-Inputs: `book_id` (required), `speaker` (required), `candidates` (optional), `text` (optional).
+Inputs: `book_id` (required), `speaker` (required), `candidates` (optional), `text` (optional), `engine` (optional), `voices` (optional).
 
 ## pagecast_speech_options
 
 Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured with application default credentials found, its spend guard, and for Gemini the 30 named prebuilt voices with Google's gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.
 
 Inputs: .
-

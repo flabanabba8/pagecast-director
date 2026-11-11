@@ -30,18 +30,20 @@ TOOLS = {
         'book_id': BOOK, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100}}, ['book_id']),
     'pagecast_assign': ('Assign exact passage IDs to a speaker; preserves text and invalidates only audio whose effective voice changes. Use Narrator for narration or uncertain quotations.', {
         'book_id': BOOK, 'passage_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 500}, 'speaker': {'type': 'string', 'maxLength': 80}}, ['book_id', 'passage_ids', 'speaker']),
-    'pagecast_voice': ('Set and lock a speaker voice. Flite is local; Higgs uses your configured loopback server/reference. Inworld uses hosted TTS-2 and your Hermes-held API credential; synthesis consumes credits and sends passage text/voice IDs to Inworld. Never replace a locked voice without an explicit user-requested change.', {
+    'pagecast_voice': ('Set and lock a speaker voice. Flite is local; Higgs uses your configured loopback server/reference. Inworld uses hosted TTS-2 and your Hermes-held API credential; synthesis consumes credits and sends passage text/voice IDs to Inworld. Never replace a locked voice without an explicit user-requested change: replace_locked=true on a voice that would really change always asks the user for approval (naming the character, the locked voice and the new one) and is refused without it; when nothing would change the result says lock kept.', {
         'book_id': BOOK, 'speaker': {'type': 'string'}, 'engine': {'type': 'string', 'enum': ['flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host']},
         'inworld_options': {'type': 'object', 'description': 'Inworld controls: deliveryMode STABLE/BALANCED/CREATIVE, speakingRate 0.5–1.5, language, timestampType WORD/CHARACTER, applyTextNormalization ON/OFF, enhanceGeneration, enableCustomPronunciation, reasoning, pronunciationDictionarySettings (named dictionary resources), reasoningContext (600 characters), previousTexts (five/2000 units), lipsync. TTS-2 ignores temperature; Flash supports temperature instead of steering.'},
         'voice': {'type': 'string'}, 'reference_audio': {'type': 'string'}, 'reference_text': {'type': 'string'},
         'locked': {'type': 'boolean'}, 'replace_locked': {'type': 'boolean'}}, ['book_id', 'speaker']),
     'pagecast_edit': ('Edit only one imported passage. Source file remains unchanged and other passages retain their cached audio.', {
         'book_id': BOOK, 'passage_id': {'type': 'integer', 'minimum': 0}, 'text': {'type': 'string', 'maxLength': 350}}, ['book_id', 'passage_id', 'text']),
-    'pagecast_render': ('Render a bounded batch of missing passages; reuse unchanged audio. Call again to resume a partial book. Stops on provider failure or cast/text revision change; no automatic generation retries.', {
-        'book_id': BOOK, 'max_segments': {'type': 'integer', 'minimum': 1, 'maximum': 100}}, ['book_id']),
+    'pagecast_render': ('Render a bounded batch of missing passages; reuse unchanged audio. Call again to resume a partial book. Stops on provider failure or cast/text revision change; no automatic generation retries. Renders with the engine and voice each speaker is CAST with (the Narrator defaults to local Flite until recast); it never substitutes another engine. The result states speech_used (engine, voice, model per group, generated vs cached) and whether anything was billed: repeat speech_summary, never describe a take otherwise. When the user asked for a specific engine or voice (for example a Gemini voice), pass engine/voice: the call is refused, with options, if the cast does not match.', {
+        'book_id': BOOK, 'max_segments': {'type': 'integer', 'minimum': 1, 'maximum': 100},
+        'engine': {'type': 'string', 'enum': ['flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host'], 'description': 'Require this engine for every passage that still needs audio; refuse instead of rendering with a different one.'},
+        'voice': {'type': 'string', 'description': 'With engine: require this exact voice name.'}}, ['book_id']),
     'pagecast_cancel': ('Request cancellation between passages; the current bounded speech call may finish first.', {'book_id': BOOK}, ['book_id']),
-    'pagecast_preview': ('Play only an already-rendered passage in audio-only mpv on the Hermes host. Use only when the user requests a preview. Does not regenerate speech or open a video window.', {
-        'book_id': BOOK, 'passage_id': {'type': 'integer', 'minimum': 0}}, ['book_id', 'passage_id']),
+    'pagecast_preview': ('Locate an already-rendered passage and say which engine and voice made it. By default NOTHING is played: it returns the audio file path. Set play=true only when the user asked to hear it on the Hermes computer; that starts audio-only mpv (and asks the user for approval). Never regenerates speech, never bills.', {
+        'book_id': BOOK, 'passage_id': {'type': 'integer', 'minimum': 0}, 'play': {'type': 'boolean', 'description': 'Play the take aloud on the Hermes host. Only when the user asked to hear it. Default false.'}}, ['book_id', 'passage_id']),
     'pagecast_retry': ('Explicitly request a new take for selected passages. Preserves prior audio in the book archive and invalidates only the selected audio signatures, including identical passages sharing that cached take. Do not retry automatically.', {
         'book_id': BOOK, 'passage_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 100}}, ['book_id', 'passage_ids']),
     'pagecast_timeline': ('Report paginated passage start/end times from verified cached WAV durations and point-in-time text-change status, without generating audio. Later audio outside the requested prefix is not checked. Limit is at most 100 with text, or 1000 without text.', {'book_id': BOOK, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000}, 'include_text': {'type': 'boolean', 'description': 'Explicitly include sensitive, untrusted passage text.'}}, ['book_id']),
@@ -71,16 +73,26 @@ TOOLS.update({
         'update': {'type': 'boolean', 'description': 'Install the downloaded release even if PageCast is already on the phone. Default false.'}}, []),
 })
 
-TOOLS['pagecast_voice_audition'] = ('For a reference-based speech server (Higgs): ask it for a few short takes of one neutral sentence with NO reference (each request invents a different voice), measure each take without any model (length, median pitch, loudness), and keep them all in the book folder. Use it when a speaker (the Narrator included) has no reference clip, then pick the candidate that fits the character and lock it with pagecast_voice (reference_audio = the candidate path, reference_text = its exact text). Candidates are auditions, not rerolls of book lines; nothing is assigned or locked. Pitch is a rough guide to how a voice sounds, not a listening review.', {
-    'book_id': BOOK, 'speaker': {'type': 'string', 'maxLength': 80}, 'candidates': {'type': 'integer', 'minimum': 2, 'maximum': 12, 'description': 'Number of audition takes (default 6).'},
-    'text': {'type': 'string', 'maxLength': 400, 'description': 'Optional neutral audition sentence, 8 to 40 plain words.'}}, ['book_id', 'speaker'])
+TOOLS['pagecast_voice_audition'] = ('Hear candidate voices for one speaker without touching the book. engine higgs (default): a reference-based speech server gives a few short takes of one neutral sentence with NO reference (each request invents a different voice), measured without any model (length, median pitch, loudness); pick one and lock it with pagecast_voice (reference_audio = the candidate path, reference_text = its exact text). engine gemini (or just pass voices): one short line per named Gemini voice on the configured route (2 to 6 voices, e.g. Leda and Kore), under the same spend guard as rendering; results list engine, voice, model, seconds and cost estimate and say they were billed. Auditions are not book lines or rerolls; nothing is assigned or locked and nothing is added to the book. Gemini auditions are PAID: only run them when the user asked to hear voices. Pitch is a rough guide, not a listening review.', {
+    'book_id': BOOK, 'speaker': {'type': 'string', 'maxLength': 80}, 'candidates': {'type': 'integer', 'minimum': 2, 'maximum': 12, 'description': 'Higgs only: number of audition takes (default 6).'},
+    'text': {'type': 'string', 'maxLength': 400, 'description': 'Optional neutral audition sentence, 8 to 40 plain words.'},
+    'engine': {'type': 'string', 'enum': ['higgs', 'gemini'], 'description': 'Default higgs, or gemini when voices is given.'},
+    'voices': {'type': 'array', 'minItems': 2, 'maxItems': 6, 'items': {'type': 'string'}, 'description': 'Gemini prebuilt voice names to audition, one line each.'}}, ['book_id', 'speaker'])
 
 TOOLS['pagecast_speech_options'] = ('Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured with application default credentials found, its spend guard, and for Gemini the 30 named prebuilt voices with Google\'s gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.', {}, [])
 
 METHODS = {'pagecast_import': 'import_book', 'pagecast_books': 'list_books', 'pagecast_book': 'get', 'pagecast_voice': 'set_voice'}
 
 
-def invoke(name, args, settings=None, storage_root=None, speech_dispatch=None):
+def lock_override_notice(changes):
+    lines = '; '.join(f"{c['character']}: locked voice {c['locked_voice']} would become {c['new_voice']}" for c in changes[:8]) + ('; and more' if len(changes) > 8 else '')
+    return 'PageCast: the assistant asks to REPLACE a LOCKED voice. ' + lines + '. Approve only if you asked for this change; otherwise deny and the locks stay.'
+
+
+def invoke(name, args, settings=None, storage_root=None, speech_dispatch=None, source='ui'):
+    """source: 'ui' = a person acting in the dashboard/desktop editor; 'hermes' = a model tool call that already
+    passed on_pre_tool_call (human approval for lock overrides and playback); 'mcp' = a model-facing connection
+    with no approval path, which therefore never overrides a lock or plays sound."""
     try:
         if name not in TOOLS or not isinstance(args, dict): raise ValueError('Unknown PageCast operation or invalid arguments')
         if name == 'pagecast_knowledge': return json.dumps(knowledge.read(**args))
@@ -93,20 +105,42 @@ def invoke(name, args, settings=None, storage_root=None, speech_dispatch=None):
             return json.dumps(android_app.status(storage_root) if args.get('action') == 'status' else android_app.download(storage_root))
         if name == 'pagecast_android_install': return json.dumps(android_app.install(storage_root, args.get('readalong_path'), bool(args.get('update', False))))
         books = Books(storage_root, settings, speech_dispatch=speech_dispatch)
+        if source == 'mcp' and isinstance(args, dict):
+            if name in LOCK_TOOLS and args.get('replace_locked') is True:
+                try: changes = books.lock_changes(name, args)
+                except Exception: changes = None
+                if changes is None or changes: return json.dumps({'error': 'Refused: replacing a locked voice needs the user to approve it, and this connection has no approval step. Locks were left as they are. Ask the user to change the voice in PageCast or through Hermes.'})
+            if name == 'pagecast_preview' and args.get('play') is True: return json.dumps({'error': 'Refused: this connection cannot ask the user before playing sound. Use the file path from a preview without play.'})
+        if name == 'pagecast_preview' and source == 'ui' and 'play' not in args: args = {**args, 'play': True}  # the person pressed Preview
         if name == 'pagecast_voice_audition': return json.dumps(voice_audition.audition(books, **args))
         return json.dumps(getattr(books, METHODS.get(name, name.removeprefix('pagecast_')))(**args))
     except (ValueError, TypeError, RuntimeError, OSError) as exc:
         return json.dumps({'error': str(exc)})
 
 
-def on_pre_tool_call(tool_name='', **kwargs):
+LOCK_TOOLS = ('pagecast_voice', 'pagecast_series_link', 'pagecast_series_voice')
+
+
+def on_pre_tool_call(tool_name='', args=None, settings=None, storage_root=None, **kwargs):
     if tool_name == 'pagecast_android_install':
         return {'action': 'approve', 'message': 'PageCast: this installs the PageCast app on your connected phone with adb and can copy your audiobook to it. Confirm you want that.', 'rule_key': 'pagecast-android-install'}
+    a = args if isinstance(args, dict) else {}
+    if tool_name == 'pagecast_preview' and a.get('play') is True:
+        return {'action': 'approve', 'message': 'PageCast: the assistant wants to play a rendered passage aloud on this computer. Approve only if you asked to hear it.', 'rule_key': 'pagecast-preview-play'}
+    if tool_name in LOCK_TOOLS and a.get('replace_locked') is True:
+        try:
+            if storage_root is None:
+                from plugins.plugin_storage import plugin_data_dir
+                storage_root = plugin_data_dir('pagecast-director')
+            changes = Books(storage_root, settings or {}).lock_changes(tool_name, a)
+        except Exception:
+            return {'action': 'approve', 'message': 'PageCast: the assistant asks to replace a locked voice and its details could not be checked. Approve only if you asked for this change; otherwise deny and the locks stay.', 'rule_key': 'pagecast-lock-override'}
+        if changes: return {'action': 'approve', 'message': lock_override_notice(changes), 'rule_key': 'pagecast-lock-override'}
     return None
 
 
 def register(ctx):
-    if hasattr(ctx, 'register_hook'): ctx.register_hook('pre_tool_call', on_pre_tool_call)
+    if hasattr(ctx, 'register_hook'): ctx.register_hook('pre_tool_call', lambda tool_name='', args=None, **kw: on_pre_tool_call(tool_name, args, settings())) 
     if hasattr(ctx, 'register_skill'):
         ctx.register_skill('pagecast-director', Path(__file__).parent / 'skills/pagecast-director/SKILL.md', description='Privately cast and direct audiobooks with the current harness model, then export PageCast Android read-along packages.')
     def settings():
@@ -115,4 +149,4 @@ def register(ctx):
     for name, (description, properties, required) in TOOLS.items():
         ctx.register_tool(name=name, toolset='pagecast_director', schema={'name': name, 'description': description, 'parameters': {
             'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}},
-            handler=lambda args, _name=name, **kwargs: invoke(_name, args, settings(),speech_dispatch=lambda tool,arguments:ctx.dispatch_tool(tool,arguments,**{k:kwargs[k] for k in ('parent_agent','session_id','task_id') if k in kwargs})))
+            handler=lambda args, _name=name, **kwargs: invoke(_name, args, settings(), source='hermes', speech_dispatch=lambda tool,arguments:ctx.dispatch_tool(tool,arguments,**{k:kwargs[k] for k in ('parent_agent','session_id','task_id') if k in kwargs})))

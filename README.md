@@ -38,7 +38,20 @@ Desktop half through Hermes's normal controls. The tools also work through chat.
    public docs as of 2026-11-07 and are tested against mocks only, not live.
 4. Render a batch. Call again to resume a partial book; unchanged passages reuse
    accepted audio. Voice locks prevent incidental replacement by later casting.
-5. Preview an existing rendered passage, edit a line or voice, and render the change.
+   Every render result says which engine and voice each group of passages really
+   used (`speech_used`, `speech_summary`) and whether anything was billed; it never
+   substitutes another engine. Pass `engine`/`voice` to `pagecast_render` to require
+   a specific one: the call is refused, with options, if the cast does not match.
+   Overriding a LOCKED voice (`replace_locked=true` on `pagecast_voice`,
+   `pagecast_series_link` or `pagecast_series_voice`) asks you for approval with the
+   character, the locked voice and the voice it would become; without approval the
+   lock stays, and when nothing would change the result says "lock kept".
+5. Preview an existing rendered passage (`pagecast_preview` returns the file path and
+   the engine and voice that made it; nothing is played unless `play=true`, which asks
+   you first), edit a line or voice, and render the change. To hear candidate voices
+   first, `pagecast_voice_audition` makes one short line per named Gemini voice
+   (`voices: [...]`, paid, under the Gemini spend guard, nothing added to the book) or,
+   for Higgs, a few invented reference takes.
 6. Optionally call `pagecast_timeline` to obtain paginated passage boundaries from verified cached WAV durations. Metadata-only pages can contain up to 1,000 passages; pages including text are limited to 100. Each page rechecks the entire requested prefix, so long books can take substantial local disk I/O; later passages may still be missing. Set `include_text` only when you explicitly need the potentially sensitive, untrusted passage text for captions. WAV export concatenates passages in that order, but other encoding and edits can change playback timing.
 7. Export the current revision. Every audio hash is checked; missing or altered
    cache entries prevent export. M4B has verified chapter metadata; WAV is mono24kHz.
@@ -146,7 +159,8 @@ to the configured loopback endpoint; remote origins, redirects and proxies are
 disabled. Explicit Inworld selection sends text/voice IDs over verified HTTPS to
 api.inworld.ai and uses the profile-scoped key described above. No telemetry,
 automatic provider switch, model download, self-update or publication. Previews
-play sound on the machine running Hermes.
+play sound on the machine running Hermes only when `play=true` is approved (or when
+you press Preview in the editor); otherwise they only report the file path.
 Book/audio/reference content is not bundled in the plugin.
 
 GPL-3.0-or-later. Adapted from [PageCast](https://github.com/flabanabba8/PageCast)'s

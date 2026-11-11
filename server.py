@@ -19,7 +19,7 @@ from pagecast_runtime.credentials import standalone
 
 def execute(name, arguments, storage, settings):
     with standalone():
-        return json.loads(package.invoke(name, arguments, settings, storage_root=storage))
+        return json.loads(package.invoke(name, arguments, settings, storage_root=storage, source="mcp"))
 
 
 def main():

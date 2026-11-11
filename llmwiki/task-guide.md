@@ -24,6 +24,9 @@ Reference-based speech (Higgs) gives a new voice to every request without a refe
 
 When pagecast_speech_options reports Gemini configured, cast by name: Gemini's 30 prebuilt voices keep the same sound on every request, so no reference clip is needed. The tool lists each voice with Google's gender and trait label (vendor labels, not a listening review); choose one voice per speaker that fits the part with median pitches (our measurement, rough) at least 20 percent apart, lock it with pagecast_voice (engine gemini), and keep tags and description outside quotation marks with the Narrator. Spending is bounded by gemini_max_usd; read pagecast_usage at the end.
 
+## Honest speech and locked voices (0.3.4)
+Render and audition results state the engine and voice actually used and whether anything was billed: repeat `speech_summary`. The Narrator defaults to local Flite; asking for a Gemini voice means casting it (or passing `engine`/`voice` to `pagecast_render`, which refuses instead of substituting). `pagecast_voice_audition` with `voices` makes one paid line per named Gemini voice under the same spend guard and adds nothing to the book. Replacing a locked voice (`replace_locked`) asks the user, naming the character, the locked voice and the new one; without approval the lock stays. `pagecast_preview` plays nothing unless `play=true` is approved.
+
 ## Failure diagnosis
 
 Wrong model/voice namespace needs contract diagnosis, not fallback or recasting. An uncertain paid request retains its attempt state. pagecast_retry is an explicit new-take request, including affected identical cached passages; it must never run automatically. Standalone MCP has no reverse generic-host speech dispatcher. Saved spending preferences are not an enforceable account-wide cap.

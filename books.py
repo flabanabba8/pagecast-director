@@ -262,18 +262,21 @@ class Books:
             existing = db.execute('SELECT series FROM book_series WHERE book=?', (book_id,)).fetchone()
             if existing and existing[0] != series_id: raise ValueError('This book already belongs to a different series')
             db.execute('INSERT OR IGNORE INTO book_series VALUES(?,?)', (book_id, series_id))
-            matched = 0
+            matched = 0; kept = 0
             for voice in db.execute('SELECT speaker,spec,locked FROM voices WHERE book=?', (book_id,)).fetchall():
                 note = db.execute('SELECT identity FROM casting_notes WHERE book=? AND speaker=?', (book_id, voice['speaker'])).fetchone()
                 shared = self._series_match(db, book_id, note[0] if note else voice['speaker'])
                 if not shared: continue
-                if voice['locked'] and voice['spec'] != shared['spec'] and not replace_locked: raise ValueError('An existing book voice is locked and differs from the series cast; an explicit replacement is required')
+                if voice['locked'] and voice['spec'] != shared['spec'] and not replace_locked: raise ValueError('A voice in this book is locked and differs from the series cast. Locks were left as they are. Replacing a locked voice needs the user to ask for it and approve it; do not retry with replace_locked on your own')
+                if voice['locked'] and replace_locked and voice['spec'] == shared['spec']: kept += 1
                 db.execute('UPDATE voices SET spec=?,locked=? WHERE book=? AND speaker=?', (shared['spec'], shared['locked'], book_id, voice['speaker']))
                 db.execute('INSERT OR REPLACE INTO series_bindings VALUES(?,?,?,?)', (book_id, voice['speaker'], series_id, shared['role']))
                 matched += 1
             db.execute('UPDATE books SET revision=revision+1 WHERE id=?', (book_id,))
             db.execute('UPDATE renders SET state=?,updated=? WHERE book=?', ('needs_render', time.time(), book_id))
-        return {'series': dict(row), 'inherited_voices': matched}
+        result = {'series': dict(row), 'inherited_voices': matched}
+        if kept: result['lock'] = f'lock kept: {kept} locked voice(s) already matched the series cast, so none was replaced'
+        return result
 
     def series_voice(self, series_id, identity, engine='inworld', voice=None, aliases=None, notes='', locked=True, replace_locked=False, inworld_options=None, direction='', reference_audio='', reference_text=''):
         aliases = [] if aliases is None else aliases
@@ -292,10 +295,10 @@ class Books:
                     if existing and row['role'] == existing['role']: continue
                     if names & {x.strip().casefold() for x in [row['identity'], *json.loads(row['aliases'])]}: raise ValueError('A character alias is already assigned to another series role')
                 role = existing['role'] if existing else 'Narrator' if identity.casefold() == 'narrator' else 'role_' + digest([series_id, identity.casefold()])[:12]
-                if existing and existing['locked'] and json.loads(existing['spec']) != spec and not replace_locked: raise ValueError('The series voice is locked; replace it only for an explicit user-requested change')
+                if existing and existing['locked'] and json.loads(existing['spec']) != spec and not replace_locked: raise ValueError('The series voice is locked and was left as it is. Replacing a locked voice needs the user to ask for it and approve it; do not retry with replace_locked on your own')
                 label = existing['label'] if existing else 'Narrator' if role == 'Narrator' else 'Voice ' + str(1 + sum(row['role'] != 'Narrator' for row in rows))
                 if existing and json.loads(existing['spec']) == spec and bool(existing['locked']) == locked and json.loads(existing['aliases']) == aliases and existing['notes'] == notes:
-                    return {'series_id': series_id, 'role': role, 'label': label, 'locked': locked, 'updated_books': 0, 'changed': False}
+                    return {'series_id': series_id, 'role': role, 'label': label, 'locked': locked, 'updated_books': 0, 'changed': False, **({'lock': 'lock kept: the series voice already is ' + self.describe_voice(spec) + ', so nothing was replaced'} if replace_locked and existing['locked'] else {})}
                 bindings = db.execute('SELECT book,speaker FROM series_bindings WHERE series=? AND role=?', (series_id, role)).fetchall()
             for book in sorted({row['book'] for row in bindings}): locks.enter_context(self.lock(book))
             with self.db() as db:
@@ -307,6 +310,54 @@ class Books:
                     db.execute('UPDATE books SET revision=revision+1 WHERE id=?', (book,))
                     db.execute('UPDATE renders SET state=?,updated=? WHERE book=?', ('needs_render', time.time(), book))
         return {'series_id': series_id, 'role': role, 'label': label, 'locked': locked, 'updated_books': len({row['book'] for row in bindings})}
+
+    @staticmethod
+    def describe_voice(spec):
+        engine, voice = spec.get('engine', '?'), spec.get('voice', '?')
+        extra = ' (with a reference clip)' if spec.get('reference_audio') else ''
+        return f'{engine} voice {voice}{extra}'
+
+    def lock_changes(self, tool, args):
+        """Locked voices that this call would really change (needs replace_locked=true). Read-only.
+
+        Returns a list of {character, locked_voice, new_voice}; an empty list means nothing locked
+        would change (so no approval is needed). Raises on arguments it cannot evaluate; callers
+        treat that as "ask", never as "allow".
+        """
+        a = args if isinstance(args, dict) else {}
+        changes = []
+        def entry(label, old, new): changes.append({'character': label, 'locked_voice': self.describe_voice(old), 'new_voice': self.describe_voice(new)})
+        if tool == 'pagecast_voice':
+            book_id = a['book_id']
+            speaker = self._resolve_speaker(book_id, a['speaker'])
+            spec = self._voice_spec(a.get('engine', 'flite'), a.get('voice'), a.get('reference_audio', ''), a.get('reference_text', ''), a.get('inworld_options'), a.get('direction', ''))
+            with self.db() as db:
+                row = db.execute('SELECT * FROM voices WHERE book=? AND speaker=?', (book_id, speaker)).fetchone()
+                shared = db.execute('SELECT c.spec FROM series_cast c JOIN series_bindings b ON b.series=c.series AND b.role=c.role WHERE b.book=? AND b.speaker=?', (book_id, speaker)).fetchone()
+            if row is None or shared: return []  # the tool itself refuses these
+            previous = json.loads(row['spec'])
+            if row['locked'] and previous != spec: entry(self._public_cast(book_id, {speaker: {}})[speaker], previous, spec)
+        elif tool == 'pagecast_series_link':
+            book_id = a['book_id']
+            with self.db() as db:
+                link = db.execute('SELECT id FROM series WHERE id=?', (a['series_id'],)).fetchone()
+                if not link: return []
+                for voice in db.execute('SELECT speaker,spec,locked FROM voices WHERE book=?', (book_id,)).fetchall():
+                    note = db.execute('SELECT identity FROM casting_notes WHERE book=? AND speaker=?', (book_id, voice['speaker'])).fetchone()
+                    rows = [r for r in db.execute('SELECT * FROM series_cast WHERE series=?', (a['series_id'],))
+                            if (note[0] if note else voice['speaker']) == r['role'] or (note[0] if note else voice['speaker']).strip().casefold() in {x.strip().casefold() for x in [r['identity'], *json.loads(r['aliases'])]}]
+                    if len(rows) == 1 and voice['locked'] and voice['spec'] != rows[0]['spec']:
+                        entry(self._public_cast(book_id, {voice['speaker']: {}})[voice['speaker']], json.loads(voice['spec']), json.loads(rows[0]['spec']))
+        elif tool == 'pagecast_series_voice':
+            spec = self._voice_spec(a.get('engine', 'inworld'), a.get('voice'), a.get('reference_audio', ''), a.get('reference_text', ''), a.get('inworld_options'), a.get('direction', ''))
+            if a.get('engine', 'inworld') in ('inworld', 'elevenlabs', 'gemini'): spec['model'] = self._voice(spec)['model']
+            identity = a['identity'].strip().casefold()
+            with self.db() as db:
+                for row in db.execute('SELECT * FROM series_cast WHERE series=?', (a['series_id'],)):
+                    if identity in {x.strip().casefold() for x in [row['identity'], *json.loads(row['aliases'])]}:
+                        if row['locked'] and json.loads(row['spec']) != spec: entry(row['label'], json.loads(row['spec']), spec)
+                        break
+        return changes
 
     @staticmethod
     def role_id(book_id, speaker):
@@ -463,13 +514,16 @@ class Books:
                 if 'model' in canonical: spec['model'] = canonical['model']
                 if spec != canonical or locked != bool(shared['locked']): raise ValueError('This role is linked to the series cast. Change its saved series voice to keep all volumes consistent')
             previous = json.loads(row['spec'])
-            if row['locked'] and previous != spec and not replace_locked: raise ValueError('Voice is locked. Replace it only for an explicit user-requested change')
+            if row['locked'] and previous != spec and not replace_locked: raise ValueError('Voice is locked and was left as it is. Replacing a locked voice needs the user to ask for it and approve it; do not retry with replace_locked on your own')
+            lock_kept = bool(row['locked']) and previous == spec and replace_locked
             if previous != spec or bool(row['locked']) != locked:
                 db.execute('UPDATE voices SET spec=?,locked=? WHERE book=? AND speaker=?', (json.dumps(spec), int(locked), book_id, speaker))
                 db.execute('UPDATE books SET revision=revision+1 WHERE id=?', (book_id,))
                 db.execute('UPDATE renders SET state=?,updated=? WHERE book=?', ('needs_render', time.time(), book_id))
             count = db.execute('SELECT COUNT(*) FROM passages WHERE book=? AND speaker=?', (book_id, speaker)).fetchone()[0]
-        return {'speaker': self.role_id(book_id, speaker), 'voice': {key: spec[key] for key in ('engine', 'voice')}, 'locked': locked, 'affected_passages': count if previous != spec else 0}
+        result = {'speaker': self.role_id(book_id, speaker), 'voice': {key: spec[key] for key in ('engine', 'voice')}, 'locked': locked, 'affected_passages': count if previous != spec else 0}
+        if lock_kept: result['lock'] = 'lock kept: the voice already is ' + self.describe_voice(spec) + ', so nothing was replaced'
+        return result
 
     def edit(self, book_id, passage_id, text):
         if isinstance(passage_id, bool) or not isinstance(passage_id, int) or not isinstance(text, str) or not text.strip() or len(text) > 350 or len(text.split()) > 60:
@@ -585,13 +639,49 @@ class Books:
         passage['provider_metadata'] = metadata
         return audio
 
-    def render(self, book_id, max_segments=20):
+    PAID_ENGINES = ('inworld', 'elevenlabs', 'gemini')
+
+    def speech_report(self, used, generated_note=True):
+        """Plain fields saying which engine and voice were really used and whether anything was billed."""
+        rows, parts = [], []
+        for (engine, voice, model, route), row in used.items():
+            if engine in self.PAID_ENGINES: billed = 'yes' if row['generated'] else 'no'
+            elif engine == 'host': billed = 'unknown' if row['generated'] else 'no'
+            else: billed = 'no'
+            rows.append({'engine': engine, 'voice': voice, 'model': model, 'route': route, 'passages_generated': row['generated'], 'passages_reused_from_cache': row['reused'],
+                         'seconds': round(row['seconds'], 2), 'billed': billed,
+                         'billing_note': {'yes': 'paid hosted speech was requested for the generated passages; amounts are in pagecast_usage, not an invoice',
+                                          'unknown': 'the selected host speech tool decides billing; check that provider',
+                                          'no': 'nothing was billed' + (' (local engine)' if engine in ('flite', 'higgs') else ' (only cached audio was reused)')}[billed]})
+            what = f'{engine} voice {voice}' + (f' ({model}, {route})' if route else f' ({model})' if model else '')
+            parts.append(f"{row['generated']} new and {row['reused']} reused passage(s) with {what}: " + {'yes': 'BILLED (paid hosted speech)', 'unknown': 'billing unknown (host speech tool)', 'no': 'not billed'}[billed])
+        flags = {r['billed'] for r in rows}
+        return {'speech_used': rows, 'billed_this_call': 'yes' if 'yes' in flags else 'unknown' if 'unknown' in flags else 'no',
+                'speech_summary': '; '.join(parts) if parts else 'No passage needed audio, so no speech engine was used and nothing was billed.',
+                'speech_notice': 'Repeat speech_summary exactly. Only the engines and voices listed in speech_used produced this audio; never describe a take as coming from any other engine or voice.'}
+
+    def render(self, book_id, max_segments=20, engine=None, voice=None):
+        if engine is not None and engine not in ('flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host'): raise ValueError('Choose a speech engine: flite, higgs, inworld, elevenlabs, gemini or host')
+        if voice is not None and (not isinstance(voice, str) or not voice.strip()): raise ValueError('voice must be a voice name')
+        if voice is not None and engine is None: raise ValueError('Name the engine together with the voice')
         if isinstance(max_segments, bool) or not isinstance(max_segments, int) or not 1 <= max_segments <= 100: raise ValueError('Render1–100 passages per bounded call')
         block = self.render_block(book_id)
         if block: raise ValueError('Rendering blocked: ' + str(block.get('reason', 'Casting review required')))
         with self.lock(book_id, 'render'), inworld.session(), ExitStack() as contexts:
             folder = self.folder(book_id); (folder / 'cancel').unlink(missing_ok=True)
             book, passages, voices = self.plan(book_id)
+            if engine is not None:
+                wrong = sorted({(self._public_cast(book_id, {p['speaker']: {}})[p['speaker']], voices[p['speaker']]['engine'], voices[p['speaker']]['voice']) for p in passages
+                                if not Path(p['audio_path']).exists() and (voices[p['speaker']]['engine'] != engine or (voice is not None and voices[p['speaker']]['voice'] != voice))})
+                if wrong:
+                    raise ValueError(f"Refused: you asked for {engine}{' voice ' + voice if voice else ''}, but the cast does not use it for every passage that still needs audio: "
+                                     + '; '.join(f'{who} is cast as {e} voice {v}' for who, e, v in wrong)
+                                     + f". Nothing was rendered, nothing was billed and no other engine was substituted. Options: change the cast with pagecast_voice (engine {engine}) for those speakers, or render again without engine/voice to use the cast exactly as it is.")
+            used = {}
+            def note(passage, seconds, fresh):
+                spec = voices[passage['speaker']]
+                row = used.setdefault((spec['engine'], spec['voice'], spec.get('model', ''), spec.get('route', '')), {'generated': 0, 'reused': 0, 'seconds': 0.0})
+                row['generated' if fresh else 'reused'] += 1; row['seconds'] += seconds
             if any(v.get('route') == 'vertex' for v in voices.values()): contexts.enter_context(vertex.session())
             done, generated, reused, recovered = 0, 0, 0, 0
             staged = {}
@@ -615,7 +705,7 @@ class Books:
                         candidate.rename(target.parent)
                         recovered += 1
                     if target.exists():
-                        duration = verify_cache(target, full=False); reused += 1
+                        duration = verify_cache(target, full=False); reused += 1; note(passage, duration, False)
                     else:
                         if target.parent.exists(): raise ValueError('Incomplete audio cache entry; review or retry this passage explicitly')
                         if generated >= max_segments: self._state(book_id, 'partial', done, len(passages)); break
@@ -681,7 +771,7 @@ class Books:
                             raw.rename(archive / raw.name); raw.with_suffix('.json').rename(archive / raw.with_suffix('.json').name)
                         else:
                             raw.unlink(); raw.with_suffix('.json').unlink()
-                        generated += 1
+                        generated += 1; note(passage, duration, True)
                     with self.lock(book_id), self.db() as db:
                         current = db.execute('SELECT revision FROM books WHERE id=?', (book_id,)).fetchone()[0]
                         if current != book['revision']:
@@ -693,28 +783,33 @@ class Books:
                 else: self._state(book_id, 'complete', done, len(passages))
             except Exception as exc:
                 self._state(book_id, 'failed', done, len(passages), str(exc))
-                return {'state': 'failed', 'generated': generated, 'reused': reused, 'error': str(exc)}
-        return {**self.get(book_id, limit=1)['render'], 'generated': generated, 'reused': reused, 'recovered': recovered}
+                return {'state': 'failed', 'generated': generated, 'reused': reused, 'error': str(exc), **self.speech_report(used), 'failure_billing_notice': 'A failed paid request may still have been billed; check pagecast_usage before retrying.'}
+        return {**self.get(book_id, limit=1)['render'], 'generated': generated, 'reused': reused, 'recovered': recovered, **self.speech_report(used)}
 
     def cancel(self, book_id):
         (self.folder(book_id) / 'cancel').touch(mode=0o600)
         return {'cancel_requested': True, 'notice': 'Cancellation takes effect between passages; the current bounded speech call may finish first.'}
 
-    def preview(self, book_id, passage_id):
+    def preview(self, book_id, passage_id, play=False):
         if isinstance(passage_id, bool) or not isinstance(passage_id, int): raise ValueError('Select a passage ID')
-        _, passages, _ = self.plan(book_id)
+        if type(play) is not bool: raise ValueError('play must be true or false')
+        _, passages, voices = self.plan(book_id)
         passage = next((p for p in passages if p['id'] == passage_id), None)
         if passage is None: raise ValueError('Unknown passage')
         path = Path(passage['audio_path'])
         if not path.exists(): raise ValueError('Render this passage with its current voice before previewing')
         duration = verify_cache(path)
-        if not shutil.which('mpv'): raise ValueError('Install mpv to preview on the Hermes host')
+        spec = voices[passage['speaker']]
+        info = {'passage_id': passage_id, 'seconds': duration, 'file': str(path), 'engine': spec['engine'], 'voice': spec['voice'], 'billed': 'no - this is a take that was already rendered; previewing generates nothing',
+                'engine_notice': f"This take was made with {spec['engine']} voice {spec['voice']}; do not describe it as any other engine."}
+        if not play:
+            return {'state': 'ready', 'played': False, **info, 'notice': 'Nothing was played. The rendered audio file is at "file"; open it yourself, or call again with play=true only if the user asked to hear it on the Hermes host.'}
+        if not shutil.which('mpv'): raise ValueError('Install mpv to play on the Hermes host, or open the file yourself: ' + str(path))
         process = subprocess.Popen(['mpv', '--no-config', '--load-scripts=no', '--ytdl=no', '--no-video', '--audio-display=no',
             '--terminal=no', '--input-terminal=no', '--force-media-title=' + self._public_cast(book_id, {passage['speaker']: {}})[passage['speaker']], str(path)],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=os.name != 'nt', env=process_env())
         threading.Thread(target=process.wait, daemon=True).start()
-        return {'state': 'launched', 'passage_id': passage_id, 'seconds': duration,
-                'notice': 'Audio preview launched on the Hermes host. Listening quality is not automatically verified.'}
+        return {'state': 'launched', 'played': True, **info, 'notice': 'Audio is playing on the Hermes host because play=true was requested. Listening quality is not automatically verified.'}
 
     def retry(self, book_id, passage_ids):
         if not isinstance(passage_ids, list) or not passage_ids or len(passage_ids) > 100 or any(isinstance(i, bool) or not isinstance(i, int) for i in passage_ids):

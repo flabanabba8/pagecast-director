@@ -227,7 +227,17 @@ call; connection/auth failures before transmission are distinct from paid retrie
 5. Render only the authorized scope in bounded batches with `pagecast_render`.
    Reuse accepted cache. Stop after a failed speech call; diagnose it and retain
    the receipt. Never automatically call `pagecast_retry` or switch voices/models.
-   Cancellation is checked between speech calls. Preview only when requested.
+   Cancellation is checked between speech calls. Preview only when requested, and
+   `pagecast_preview` plays nothing unless you pass `play=true` for a user who asked to hear it
+   (the user is asked to approve); otherwise tell them the file path.
+   SPEECH HONESTY: the render and audition results list the engine and voice actually used and
+   whether anything was billed (`speech_summary`): repeat it, never describe a take as another
+   engine or voice (the Narrator is local Flite until recast). If the user asked for a particular
+   engine or voice, pass `engine`/`voice` to `pagecast_render`; a refusal means recast first, never
+   a substitute. To let the user hear named Gemini voices, call `pagecast_voice_audition` with
+   `voices` (2 to 6 names; paid, spend-guarded, nothing added to the book).
+   LOCKS: never pass `replace_locked=true` unless the user asked to replace that voice; the
+   user is asked to approve it, and a refusal means the lock stays.
 6. Export `format: "readalong"`. The user copies the resulting `.readalong.zip`
    into PageCast Android via Import book → PC audiobook. Existing M4B/WAV exports
    remain available. Report saved locations and counts without story content.
