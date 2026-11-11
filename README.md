@@ -17,6 +17,7 @@ casting and direction; spoiler-safe progress keeps story details private.
 - **Credits:** Optional voices come from the engines you choose (Flite, Higgs TTS 3, Inworld, ElevenLabs, Google Gemini); their terms apply to what you make. Licence: GPL-3.0-or-later.
 - **AI assistance:** Written with AI coding assistants (Anthropic Claude and OpenAI Codex agents) under the maintainer's direction; what was actually tested is listed in VERIFICATION.md.
 
+There is no web dashboard tab; `dashboard/plugin_api.py` only serves the Desktop editor page.
 The unified Desktop page includes import, passage editing, casting, voice locks,
 render progress, previews and export. Enable both the Python plugin and its
 Desktop half through Hermes's normal controls. The tools also work through chat.
@@ -348,9 +349,11 @@ Vertex sends unchanged source words through global `generateContent`, accepts WA
 directly and does not send Inworld performance markup. Cache identity includes
 the route and project so artifacts from another route are not reused. The
 `gemini_max_usd` setting defaults to a conservative USD 3 per-book spending guard:
-usage is recorded privately at full list rates and uncertain requests retain a
-maximum reservation. Each speech request reserves about USD 0.31 before it runs,
-so a guard below that blocks every render; use 0.35 or more. Promotional credits are not assumed. This is a local guard,
+usage is recorded privately at full list rates. Each speech request first reserves a
+safe estimate from its text length (about USD 0.005 for a line, about USD 0.13 for the
+largest 2000-character request); a request that would pass the guard is refused before anything is sent,
+and the message gives the estimate, the amount used and the guard. Uncertain requests
+keep their reservation. A short chapter fits a guard of USD 0.10. Promotional credits are not assumed. This is a local guard,
 not an account invoice. Failed or uncertain speech calls are never retried
 automatically. Export and Android read-along import use the existing workflow.
 

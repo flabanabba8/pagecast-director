@@ -1,6 +1,6 @@
 {
   "name": "pagecast-director",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Spoiler-safe cast audiobooks using your current harness model, with Inworld TTS-2 and offline PageCast Android read-along.",
   "license": "GPL-3.0-or-later",
   "skills": "./skills/",

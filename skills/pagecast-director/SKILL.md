@@ -42,6 +42,8 @@ remaining quota. Saved budget is a preference, not an authorization or universal
 meter. Before a paid batch require a conservative estimate and an enforceable
 remaining per-book/month cap via the selected provider/host tool; if unavailable,
 report the blocked spending guard and offer an eligible local alternative.
+No tool changes the Vertex guard: when a render is refused for the guard, quote the refusal's
+estimate and guard and tell the user to raise the `gemini_max_usd` plugin setting themselves.
 Never silently switch providers, models, runtimes or locked casts.
 
 For any selected speech model supported by a registered native host tool, use

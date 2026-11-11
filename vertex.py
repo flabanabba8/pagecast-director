@@ -13,7 +13,21 @@ _active = ContextVar('pagecast_vertex_session', default=None)
 # Conservative full list rates; promotional credits are not assumed.
 INPUT_USD = 1 / 1_000_000
 OUTPUT_USD = 18 / 1_000_000
+# Hard ceiling of one request (8192 in + 16384 out tokens); also the cost of the largest text.
 RESERVATION = 8192 * INPUT_USD + 16384 * OUTPUT_USD
+MIN_RESERVATION = 0.005
+
+
+def estimate_usd(text):
+    """Safe upper estimate for one request, from the text length.
+
+    Input: one token per UTF-16 unit plus a small overhead (real text is about 0.25 per character).
+    Output: audio is 25 tokens per second; assume a slow 7 characters per second, about twice
+    the real cost. Never below MIN_RESERVATION, never above the per-request ceiling.
+    """
+    units = len(text.encode('utf-16-le')) // 2
+    cost = (units + 64) * INPUT_USD + (units * 3.6 + 100) * OUTPUT_USD
+    return min(RESERVATION, max(MIN_RESERVATION, cost))
 
 
 @lru_cache(maxsize=1)
@@ -71,8 +85,12 @@ def synthesize(text, voice, model, observe, *, project, ledger_path, max_usd=3):
     if isinstance(max_usd, bool) or not isinstance(max_usd, (int, float)) or not 0 < max_usd <= 100:
         raise ValueError('Set a Vertex book budget between 0 and 100 USD')
     ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else []
-    if sum(row['reserved_or_actual_usd'] for row in ledger) + RESERVATION > max_usd:
-        raise HostedError('Vertex book spending guard reached; no speech request sent')
+    estimate = estimate_usd(text)
+    spent = sum(row['reserved_or_actual_usd'] for row in ledger)
+    if spent + estimate > max_usd:
+        raise HostedError(f'Vertex book spending guard reached; no speech request sent. This request is estimated at '
+                          f'up to {estimate:.4f} USD and {spent:.4f} USD is already used or reserved, against a guard of '
+                          f'{max_usd:g} USD. Raise the gemini_max_usd setting, or render fewer or shorter passages.')
     event = observe or (lambda *_: None)
     usage = {'reported_units': None, 'requested_utf16_units': len(text.encode('utf-16-le')) // 2, 'model_id': model, 'route': 'vertex'}
     try:
@@ -103,7 +121,7 @@ def synthesize(text, voice, model, observe, *, project, ledger_path, max_usd=3):
                 event('not_sent', usage)
                 raise HostedError(f'Vertex connection preflight failed ({last_error}); no speech POST sent') from None
             client.headers['x-goog-user-project'] = project
-        row = {'started': time.time(), 'status': 'pending', 'reserved_or_actual_usd': RESERVATION}
+        row = {'started': time.time(), 'status': 'pending', 'reserved_or_actual_usd': estimate}
         ledger.append(row); save(ledger_path, ledger); event('pending', usage)
         try:
             response = client.post(base, headers=headers, json=body, timeout=(60, 240), allow_redirects=False)

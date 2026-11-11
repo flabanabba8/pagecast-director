@@ -59,6 +59,29 @@ class VertexTests(unittest.TestCase):
                 vertex.synthesize('Hello.', 'fixture_voice', 'gemini-3.8-flash-tts', None, project='fixture-project', ledger_path=ledger_path)
             self.assertEqual(len(client.calls), 1)
 
+    def test_reservation_scales_with_text_and_guard_stays_strict(self):
+        client = Client()
+        @contextmanager
+        def session(): yield client
+        short = 'Storms never care about tea, lass. ' * 20
+        self.assertLess(vertex.estimate_usd(short), 0.10)
+        self.assertEqual(vertex.estimate_usd('Hi.'), vertex.MIN_RESERVATION)
+        self.assertEqual(vertex.estimate_usd('x' * 100000), vertex.RESERVATION)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(vertex, 'session', session), patch.object(vertex, 'credentials', return_value=Mock(valid=True, token='fixture-token')):
+            ledger_path = Path(tmp) / 'u.json'
+            audio, _ = vertex.synthesize(short, 'fixture_voice', 'gemini-3.8-flash-tts', None, project='fixture-project', ledger_path=ledger_path, max_usd=0.10)
+            self.assertTrue(audio)
+            self.assertAlmostEqual(json.loads(ledger_path.read_text())[0]['reserved_or_actual_usd'], .000912)
+            with self.assertRaises(vertex.HostedError) as raised:
+                vertex.synthesize('x' * 2000, 'fixture_voice', 'gemini-3.8-flash-tts', None, project='fixture-project', ledger_path=ledger_path, max_usd=0.10)
+            message = str(raised.exception)
+            self.assertIn('no speech request sent', message)
+            self.assertIn('0.1 USD', message); self.assertIn('gemini_max_usd', message)
+            self.assertEqual(len(client.calls), 1)
+            ledger_path.write_text(json.dumps([{'reserved_or_actual_usd': 0.098}]))
+            with self.assertRaisesRegex(vertex.HostedError, 'spending guard'):
+                vertex.synthesize(short, 'fixture_voice', 'gemini-3.8-flash-tts', None, project='fixture-project', ledger_path=ledger_path, max_usd=0.10)
+
     def test_uncertain_post_reserves_cost_and_is_not_automatically_repeated(self):
         client = Client(); client.fail = True
         @contextmanager
@@ -74,7 +97,7 @@ class VertexTests(unittest.TestCase):
             self.assertEqual(ledger[0]['status'], 'unknown')
             self.assertEqual(books.usage(identifier)['unknown_outcomes'], 1)
             self.assertEqual(books.usage(identifier)['vertex']['unknown_requests'], 1)
-            self.assertEqual(ledger[0]['reserved_or_actual_usd'], vertex.RESERVATION)
+            self.assertEqual(ledger[0]['reserved_or_actual_usd'], vertex.estimate_usd('Hello there.'))
 
 
     def test_unreadable_ledger_does_not_expose_contents_or_reset_it(self):
