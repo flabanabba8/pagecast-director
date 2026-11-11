@@ -1,5 +1,7 @@
 # PageCast Director
 
+![PageCast Director: cast the voices, keep the good takes](assets/thumbnail.jpg)
+
 Make an editable cast audiobook from a chapter or EPUB. Assign quotations to
 characters, lock their voices, render in resumable batches, and regenerate only
 the audio affected by a text or voice change. Export chaptered M4B, WAV or an
