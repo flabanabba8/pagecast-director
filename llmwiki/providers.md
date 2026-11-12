@@ -27,6 +27,8 @@ Project snapshots dated September must be refreshed before a November decision.
 | OpenAI | Legacy gpt-4o-mini-tts, tts-1, tts-1-hd; migration target gpt-realtime-2.1-mini | Research/host-adapter candidate only. Current official speech guide marks the legacy models deprecated with shutdown Jan 6, 2027, and directs migration to Realtime. The new model is not accepted by /v1/audio/speech; a real Realtime adapter is required. Do not blindly reuse a multipart/Speech API wrapper. |
 | Android system TTS | Installed engine packages, installed/offline or network voices | Android app's native TextToSpeech integration, not a desktop Director speech engine. A phone's installed engine is not automatically callable by the PC. Requires an explicit supported bridge if used as a remote synthesis resource. |
 
+Free allowances, current prices and the full local-model table by hardware (read 2026-11-12) are in [speech models](speech-models.md); this page keeps the Director's engine-by-engine integration notes.
+
 ## Selecting the small local model
 
 The Kitten upstream README checked Nov 9 distinguishes Nano int8 (15M, about

@@ -179,3 +179,9 @@ Inputs: `book_id` (required), `speaker` (required), `candidates` (optional), `te
 Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured and Hermes sign-in support is present, its spend guard, and for Gemini the 30 named prebuilt voices with Google's gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.
 
 Inputs: .
+## pagecast_speech_setup
+
+First-use interview and speech check. Without answers: returns what speech this computer has (installed speech programs, speech servers that answer, which online accounts are set up) and the questions to ask the user: what they want to make, natural vs plain voice, whether online and paid services are OK and a budget, what they already have. With answers: saves them and says the route the user chose, which pagecast_voice with engine chosen then uses, and what is missing. The plugin never picks an engine itself: rendering and engine-chosen casting return the options and questions until the user has chosen a route. Sends nothing, spends nothing.
+
+Inputs: `answers` (optional).
+

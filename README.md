@@ -22,6 +22,8 @@ The unified Desktop page includes import, passage editing, casting, voice locks,
 render progress, previews and export. Enable both the Python plugin and its
 Desktop half through Hermes's normal controls. The tools also work through chat.
 
+**0.4.0:** the plugin asks the user which voice to use and never picks one. `pagecast_speech_setup` lists what this computer has, reads the hardware and suggests online services (Gemini 3.8 Flash TTS, Inworld, ElevenLabs, with dated free-allowance facts) and local models that fit; the saved choice is the only route used. New `system` engine for installed speech programs. See `llmwiki/speech-models.md` and VERIFICATION.md.
+
 ## Workflow
 
 1. Import supplied text or an explicit absolute TXT/EPUB path. The source stays

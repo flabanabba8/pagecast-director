@@ -1,5 +1,5 @@
 name: pagecast-director
-version: "0.3.5"
+version: "0.4.0"
 description: "Editable cast narration with locked voices, source passage IDs, resumable synthesis and selective regeneration."
 author: "PageCast Director contributors"
 license: GPL-3.0-or-later
@@ -41,6 +41,7 @@ provides_tools:
   - pagecast_voice
   - pagecast_voice_audition
   - pagecast_speech_options
+  - pagecast_speech_setup
   - pagecast_edit
   - pagecast_render
   - pagecast_cancel

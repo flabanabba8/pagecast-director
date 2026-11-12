@@ -10,7 +10,7 @@ from unittest.mock import patch, Mock
 from test_pagecast import package, ROOT
 from test_vertex import Client
 from test_inworld import wav
-from pagecast_test import vertex, voice_audition
+from pagecast_test import speech_resources, vertex, voice_audition
 from pagecast_test.books import Books
 
 GEMINI = {'gemini_route': 'vertex', 'gemini_project': 'fixture-project', 'gemini_max_usd': 1}
@@ -105,6 +105,10 @@ class LockApprovalTests(unittest.TestCase):
 
 
 class EngineHonestyTests(unittest.TestCase):
+    def setUp(self):
+        self._answered = patch.object(speech_resources, 'load_profile', lambda root: {'answered': True, 'allow_cloud': True, 'allow_paid': True, 'budget_usd': 3.0, 'quality': 'plain-ok', 'needs': 't', 'has': [], 'route': 'gemini:vertex'})
+        self._answered.start(); self.addCleanup(self._answered.stop)
+
     def render_book(self, tmp, client):
         books, book = fixture(tmp)
         books.set_voice(book, 'Narrator', engine='gemini', voice='Kore')

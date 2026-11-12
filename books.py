@@ -19,6 +19,7 @@ import uuid
 import wave
 
 from .higgs import synthesize
+from . import speech_resources
 from .reference_paths import resolve_reference
 from . import inworld, hosted, vertex
 from . import host_speech
@@ -210,7 +211,7 @@ class Books:
                 [(identifier, i, u['chapter'], u['chapter_title'], u['paragraph'], u['start'], u['end'], u['quote_id'], u['text'], 'Narrator') for i, u in enumerate(units)])
             db.executemany('INSERT INTO source_passage_hashes VALUES(?,?,?)',
                 [(identifier, i, hashlib.sha256(u['text'].encode('utf-8')).hexdigest()) for i, u in enumerate(units)])
-            db.execute('INSERT INTO voices VALUES(?,?,?,?)', (identifier, 'Narrator', json.dumps({'engine': 'flite', 'voice': 'rms'}), 0))
+            db.execute('INSERT INTO voices VALUES(?,?,?,?)', (identifier, 'Narrator', json.dumps(self._default_narrator()), 0))
         return {'book_id': identifier, 'title': title, 'passages': len(units), 'chapters': len(chapters),
                 'quoted_passages_using_narrator': sum(u['quote_id'] is not None for u in units), 'source_hash': source_hash}
 
@@ -469,7 +470,57 @@ class Books:
                 db.execute('UPDATE renders SET state=?,updated=? WHERE book=?', ('needs_render', time.time(), book_id))
         return {'changed_passages': changed, 'speaker': self.role_id(book_id, speaker)}
 
+    def _default_narrator(self):
+        """Placeholder cast for a new book (the long-standing Flite narrator). It is NOT a choice for the user:
+        rendering stays blocked until the user has chosen a speech route in pagecast_speech_setup."""
+        return {'engine': 'flite', 'voice': 'rms'}
+
+    def speech_resources_report(self):
+        """What speech this computer and profile have; read-only. PageCast can drive these hosted providers."""
+        cfg = speech_resources.apply_profile(self.settings, speech_resources.load_profile(self.root / 'x'))
+        secrets = lambda n: bool(self._secret_present(n))
+        report = speech_resources.discover(cfg, secret_present=secrets, hosted=('gemini', 'elevenlabs', 'inworld'))
+        if str(cfg.get('gemini_route', '')) != 'vertex': report['backends'] = [b for b in report['backends'] if b['id'] != 'gemini:vertex']
+        return report, cfg
+
+    def _secret_present(self, name):
+        try:
+            from .credentials import get_secret
+            return bool(get_secret(name))
+        except Exception:
+            return False
+
+    def _chosen_engine(self):
+        """The engine for the route the USER chose in pagecast_speech_setup. Never a guess."""
+        report, cfg = self.speech_resources_report()
+        profile = speech_resources.load_profile(self.root / 'x')
+        if not profile or not profile.get('route'):
+            raise ValueError('No speech route has been chosen yet. Ask the user which one to use (pagecast_speech_setup). ' + report['advice'])
+        pick = speech_resources.chosen(report, profile)
+        if pick is None: raise ValueError('The speech route the user chose (%s) is not available now. Ask them to choose again (pagecast_speech_setup). %s' % (profile['route'], report['advice']))
+        if pick['kind'] == 'system': return 'system', {'tool': pick['tool']}
+        if pick['kind'] == 'server': raise ValueError('The chosen speech server needs a reference clip for each speaker; cast with engine higgs and a reference (see pagecast_voice_audition) instead.')
+        if pick['kind'] == 'host': return 'host', {}
+        name = pick['id']
+        if name.startswith('gemini:'): return 'gemini', {'route': name.split(':')[1]}
+        return name, {}
+
     def _voice_spec(self, engine, voice, reference_audio='', reference_text='', inworld_options=None, direction=''):
+        extra = {}
+        if engine == 'chosen': engine, extra = self._chosen_engine()
+        if engine in ('system',) and 'tool' not in extra:
+            tools = speech_resources.system_tools(piper_model=str(self.settings.get('piper_model', '')))
+            if not tools: raise ValueError('No installed speech program was found. ' + self.speech_resources_report()[0]['advice'])
+            extra = {'tool': next(t for t in speech_resources.FREE_ORDER if t in tools)}
+        if engine == 'system' and voice is None: voice = speech_resources.DEFAULT_VOICE.get(extra['tool'], 'default')
+        if engine in ('inworld', 'elevenlabs', 'gemini', 'host'):
+            profile = speech_resources.load_profile(self.root / 'x')
+            if profile: speech_resources.refuse_cloud_if_forbidden(profile, engine)
+        spec = self._voice_spec_base(engine, voice, reference_audio, reference_text, inworld_options, direction)
+        spec.update(extra)
+        return spec
+
+    def _voice_spec_base(self, engine, voice, reference_audio='', reference_text='', inworld_options=None, direction=''):
         if voice is None: voice = 'rms' if engine == 'flite' else 'Ashley' if engine == 'inworld' else 'Rachel' if engine == 'elevenlabs' else 'Kore' if engine == 'gemini' else 'default'
         spec = {'engine': engine, 'voice': voice}
         if inworld_options is not None:
@@ -477,6 +528,9 @@ class Books:
             spec['inworld_options'] = inworld.options(inworld_options, self.settings.get('inworld_model', 'inworld-tts-2'))
         if engine == 'flite':
             if voice not in FLITE_VOICES: raise ValueError('Choose a built-in Flite voice: ' + ', '.join(FLITE_VOICES))
+            if reference_audio or reference_text: raise ValueError('Voice references apply only to Higgs')
+        elif engine == 'system':
+            if not isinstance(voice, str) or not voice[:1].isalnum() or len(voice) > 128 or not all(c.isalnum() or c in ' _.:+-' for c in voice): raise ValueError('Voice names use letters, digits and _ . : + - only')
             if reference_audio or reference_text: raise ValueError('Voice references apply only to Higgs')
         elif engine == 'higgs':
             if not isinstance(voice, str) or not 1 <= len(voice) <= 80 or not isinstance(reference_text, str) or len(reference_text) > 2000: raise ValueError('Invalid Higgs voice or reference transcript')
@@ -492,7 +546,7 @@ class Books:
             if not isinstance(voice,str) or not 1<=len(voice)<=160:raise ValueError('Select the voice supported by the chosen host speech tool')
             if reference_audio or reference_text:raise ValueError('Configure reference handling explicitly in the selected host speech tool')
             host_speech.binding(self.settings)
-        else: raise ValueError('Choose an installed/configured speech backend: flite, higgs, inworld, elevenlabs, gemini or host')
+        else: raise ValueError('Choose an installed/configured speech backend: chosen (the route the user picked), system, flite, higgs, inworld, elevenlabs, gemini or host')
         if not isinstance(direction, str) or len(direction) > 240 or any(c in direction for c in '[]<>\n\r'): raise ValueError('Use up to 240 characters of plain English delivery direction')
         if direction:
             if engine != 'inworld': raise ValueError('Delivery direction requires Inworld TTS-2')
@@ -542,12 +596,22 @@ class Books:
         value = {k: v for k, v in spec.items() if k != 'locked'}
         if value['engine'] == 'flite':
             binary = shutil.which('flite')
-            if not binary: raise ValueError('Install Flite for offline voices, or explicitly select Higgs/Inworld')
+            if not binary: raise ValueError('Install Flite for offline voices, or ask the user which speech route to use. ' + self.speech_resources_report()[0]['advice'])
             stamp = Path(binary).stat()
             key = (binary, stamp.st_size, stamp.st_mtime_ns)
             if key not in self.runtime_hashes:
                 with open(binary, 'rb') as stream: self.runtime_hashes[key] = hashlib.file_digest(stream, 'sha256').hexdigest()
             value['runtime_sha256'] = self.runtime_hashes[key]
+        elif value['engine'] == 'system':
+            tool = value.get('tool')
+            tools = speech_resources.system_tools(piper_model=str(self.settings.get('piper_model', '')))
+            if tool not in tools: raise ValueError('The speech program %s is not installed on this computer. %s' % (tool, self.speech_resources_report()[0]['advice']))
+            stamp = Path(tools[tool]).stat()
+            key = (tools[tool], stamp.st_size, stamp.st_mtime_ns)
+            if key not in self.runtime_hashes:
+                with open(tools[tool], 'rb') as stream: self.runtime_hashes[key] = hashlib.file_digest(stream, 'sha256').hexdigest()
+            value['runtime_sha256'] = self.runtime_hashes[key]
+            if tool == 'piper': value['piper_model'] = str(self.settings.get('piper_model', ''))
         elif value['engine'] == 'inworld':
             model = value.get('model') or self.settings.get('inworld_model', 'inworld-tts-2')
             if model not in inworld.MODELS: raise ValueError('Choose a supported Inworld TTS-2 model')
@@ -652,7 +716,7 @@ class Books:
                          'seconds': round(row['seconds'], 2), 'billed': billed,
                          'billing_note': {'yes': 'paid hosted speech was requested for the generated passages; amounts are in pagecast_usage, not an invoice',
                                           'unknown': 'the selected host speech tool decides billing; check that provider',
-                                          'no': 'nothing was billed' + (' (local engine)' if engine in ('flite', 'higgs') else ' (only cached audio was reused)')}[billed]})
+                                          'no': 'nothing was billed' + (' (local engine)' if engine in ('flite', 'higgs', 'system') else ' (only cached audio was reused)')}[billed]})
             what = f'{engine} voice {voice}' + (f' ({model}, {route})' if route else f' ({model})' if model else '')
             parts.append(f"{row['generated']} new and {row['reused']} reused passage(s) with {what}: " + {'yes': 'BILLED (paid hosted speech)', 'unknown': 'billing unknown (host speech tool)', 'no': 'not billed'}[billed])
         flags = {r['billed'] for r in rows}
@@ -661,7 +725,7 @@ class Books:
                 'speech_notice': 'Repeat speech_summary exactly. Only the engines and voices listed in speech_used produced this audio; never describe a take as coming from any other engine or voice.'}
 
     def render(self, book_id, max_segments=20, engine=None, voice=None):
-        if engine is not None and engine not in ('flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host'): raise ValueError('Choose a speech engine: flite, higgs, inworld, elevenlabs, gemini or host')
+        if engine is not None and engine not in ('flite', 'system', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host'): raise ValueError('Choose a speech engine: flite, system, higgs, inworld, elevenlabs, gemini or host')
         if voice is not None and (not isinstance(voice, str) or not voice.strip()): raise ValueError('voice must be a voice name')
         if voice is not None and engine is None: raise ValueError('Name the engine together with the voice')
         if isinstance(max_segments, bool) or not isinstance(max_segments, int) or not 1 <= max_segments <= 100: raise ValueError('Render1–100 passages per bounded call')
@@ -720,6 +784,8 @@ class Books:
                             script = raw.with_suffix('.txt'); script.write_text(passage['text'], encoding='utf-8'); script.chmod(0o600)
                             try: run(['flite', '-voice', voice['voice'], '-f', str(script), '-o', str(raw)], timeout=30)
                             finally: script.unlink(missing_ok=True)
+                        elif voice['engine'] == 'system':
+                            speech_resources.synthesize_system(voice['tool'], passage['text'], voice['voice'], raw, piper_model=voice.get('piper_model', ''))
                         elif voice['engine'] == 'higgs':
                             raw.write_bytes(synthesize(voice['endpoint'], voice['model'], passage['text'], voice['voice'], voice.get('reference_data', ''), voice.get('reference_text', '')))
                         elif voice['engine'] == 'host':

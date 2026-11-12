@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 from .books import Books, FLITE_VOICES
-from . import android_app, inworld, knowledge, speech_options, voice_audition
+from . import android_app, inworld, knowledge, speech_options, speech_resources, voice_audition
 
 BOOK = {'type': 'string', 'description': 'Book ID returned by pagecast_import.'}
 TOOLS = {
@@ -31,7 +31,7 @@ TOOLS = {
     'pagecast_assign': ('Assign exact passage IDs to a speaker; preserves text and invalidates only audio whose effective voice changes. Use Narrator for narration or uncertain quotations.', {
         'book_id': BOOK, 'passage_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 500}, 'speaker': {'type': 'string', 'maxLength': 80}}, ['book_id', 'passage_ids', 'speaker']),
     'pagecast_voice': ('Set and lock a speaker voice. Flite is local; Higgs uses your configured loopback server/reference. Inworld uses hosted TTS-2 and your Hermes-held API credential; synthesis consumes credits and sends passage text/voice IDs to Inworld. Never replace a locked voice without an explicit user-requested change: replace_locked=true on a voice that would really change always asks the user for approval (naming the character, the locked voice and the new one) and is refused without it; when nothing would change the result says lock kept.', {
-        'book_id': BOOK, 'speaker': {'type': 'string'}, 'engine': {'type': 'string', 'enum': ['flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host']},
+        'book_id': BOOK, 'speaker': {'type': 'string'}, 'engine': {'type': 'string', 'enum': ['chosen', 'system', 'flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host']},
         'inworld_options': {'type': 'object', 'description': 'Inworld controls: deliveryMode STABLE/BALANCED/CREATIVE, speakingRate 0.5–1.5, language, timestampType WORD/CHARACTER, applyTextNormalization ON/OFF, enhanceGeneration, enableCustomPronunciation, reasoning, pronunciationDictionarySettings (named dictionary resources), reasoningContext (600 characters), previousTexts (five/2000 units), lipsync. TTS-2 ignores temperature; Flash supports temperature instead of steering.'},
         'voice': {'type': 'string'}, 'reference_audio': {'type': 'string'}, 'reference_text': {'type': 'string'},
         'locked': {'type': 'boolean'}, 'replace_locked': {'type': 'boolean'}}, ['book_id', 'speaker']),
@@ -39,7 +39,7 @@ TOOLS = {
         'book_id': BOOK, 'passage_id': {'type': 'integer', 'minimum': 0}, 'text': {'type': 'string', 'maxLength': 350}}, ['book_id', 'passage_id', 'text']),
     'pagecast_render': ('Render a bounded batch of missing passages; reuse unchanged audio. Call again to resume a partial book. Stops on provider failure or cast/text revision change; no automatic generation retries. Renders with the engine and voice each speaker is CAST with (the Narrator defaults to local Flite until recast); it never substitutes another engine. The result states speech_used (engine, voice, model per group, generated vs cached) and whether anything was billed: repeat speech_summary, never describe a take otherwise. When the user asked for a specific engine or voice (for example a Gemini voice), pass engine/voice: the call is refused, with options, if the cast does not match.', {
         'book_id': BOOK, 'max_segments': {'type': 'integer', 'minimum': 1, 'maximum': 100},
-        'engine': {'type': 'string', 'enum': ['flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host'], 'description': 'Require this engine for every passage that still needs audio; refuse instead of rendering with a different one.'},
+        'engine': {'type': 'string', 'enum': ['system', 'flite', 'higgs', 'inworld', 'elevenlabs', 'gemini', 'host'], 'description': 'Require this engine for every passage that still needs audio; refuse instead of rendering with a different one.'},
         'voice': {'type': 'string', 'description': 'With engine: require this exact voice name.'}}, ['book_id']),
     'pagecast_cancel': ('Request cancellation between passages; the current bounded speech call may finish first.', {'book_id': BOOK}, ['book_id']),
     'pagecast_preview': ('Locate an already-rendered passage and say which engine and voice made it. By default NOTHING is played: it returns the audio file path. Set play=true only when the user asked to hear it on the Hermes computer; that starts audio-only mpv (and asks the user for approval). Never regenerates speech, never bills.', {
@@ -79,6 +79,8 @@ TOOLS['pagecast_voice_audition'] = ('Hear candidate voices for one speaker witho
     'engine': {'type': 'string', 'enum': ['higgs', 'gemini'], 'description': 'Default higgs, or gemini when voices is given.'},
     'voices': {'type': 'array', 'minItems': 2, 'maxItems': 6, 'items': {'type': 'string'}, 'description': 'Gemini prebuilt voice names to audition, one line each.'}}, ['book_id', 'speaker'])
 
+TOOLS['pagecast_speech_setup'] = ('First-use interview and speech check. Without answers: returns what speech this computer has (installed speech programs, speech servers that answer, which online accounts are set up) and the questions to ask the user: what they want to make, natural vs plain voice, whether online and paid services are OK and a budget, what they already have. With answers: saves them and says the route the user chose, which pagecast_voice with engine chosen then uses, and what is missing. The plugin never picks an engine itself: rendering and engine-chosen casting return the options and questions until the user has chosen a route. Sends nothing, spends nothing.',
+    {'answers': {'type': 'object', 'description': 'needs (text), quality (natural|plain-ok), allow_cloud (bool), allow_paid (bool), budget_usd (number), has (list of local_server, gemini_key, google_cloud_project, elevenlabs_key, inworld_key, host_speech_tool, nothing), voice_notes (text).'}}, [])
 TOOLS['pagecast_speech_options'] = ('Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured and Hermes sign-in support is present, its spend guard, and for Gemini the 30 named prebuilt voices with Google\'s gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.', {}, [])
 
 METHODS = {'pagecast_import': 'import_book', 'pagecast_books': 'list_books', 'pagecast_book': 'get', 'pagecast_voice': 'set_voice'}
@@ -99,7 +101,16 @@ def invoke(name, args, settings=None, storage_root=None, speech_dispatch=None, s
         if storage_root is None:
             from plugins.plugin_storage import plugin_data_dir
             storage_root = plugin_data_dir('pagecast-director')
-        if name == 'pagecast_speech_options': return json.dumps(speech_options.speech_options(settings or {}))
+        settings = speech_resources.apply_profile(settings or {}, speech_resources.load_profile(Path(storage_root) / 'x'))   # the user's answers (no online services, budget) shape every call
+        if name == 'pagecast_speech_options': return json.dumps(speech_options.speech_options(settings or {}, Books(storage_root, settings, speech_dispatch).speech_resources_report()[0]))
+        if name == 'pagecast_speech_setup':
+            report, _ = Books(storage_root, settings, speech_dispatch).speech_resources_report()
+            return json.dumps(speech_resources.interview(settings or {}, Path(storage_root) / 'x', report, args.get('answers')))
+        if name in ('pagecast_render', 'pagecast_voice') and (name == 'pagecast_render' or args.get('engine') == 'chosen') and source != 'ui':
+            _profile = speech_resources.load_profile(Path(storage_root) / 'x')
+            if not _profile or not _profile.get('route'):
+                report, _ = Books(storage_root, settings, speech_dispatch).speech_resources_report()
+                return json.dumps({**speech_resources.interview(settings or {}, Path(storage_root) / 'x', report), 'next': 'Do not pick a voice engine for the user. Show the options, ask which one they want, save it with pagecast_speech_setup (route), then repeat this call.'})
         if name == 'pagecast_inworld_voices': return json.dumps(inworld.voices(**args))
         if name == 'pagecast_android_app':
             return json.dumps(android_app.status(storage_root) if args.get('action') == 'status' else android_app.download(storage_root))

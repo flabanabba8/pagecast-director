@@ -31,6 +31,6 @@ def _gemini(settings):
     return out
 
 
-def speech_options(settings):
-    return {'higgs': _higgs(settings), 'gemini': _gemini(settings),
+def speech_options(settings, discovered=None):
+    return {'higgs': _higgs(settings), 'gemini': _gemini(settings), 'discovered': discovered,
             'notice': 'Read-only check of what is reachable or configured. No speech was generated, no credential or project value is shown, nothing was spent.'}

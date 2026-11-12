@@ -3,6 +3,16 @@ name: pagecast-director
 description: Create or edit cast audiobooks from user-selected TXT or EPUB, choose speech resources with the user, direct performances with the current host model, and export offline read-along audio for PageCast Android.
 ---
 
+## First use: ask the user which voice to use
+
+Never pick a speech engine for the user. Narration and audio rendering return the options found on this computer and the questions until the user has chosen a route. When that happens:
+
+1. Show the options in plain words: what each one is, whether the text stays on this computer or goes online, and whether it is free. Use the plugin's `recommendations` (remote order and a local model that fits this computer's hardware) and say they are suggestions, not a choice made for the user.
+2. Ask in one short message which one they want, plus: what they want to make, whether the voice must sound natural or a plain robotic voice is fine, whether sending text online is OK, whether paid use is OK and the most they want to spend per project, and what else they already have (a speech server, a Gemini key, a Cloud project, ElevenLabs or Inworld, a Hermes speech tool).
+3. Never ask for or accept a key in chat. Keys go in this plugin's Hermes settings.
+4. Save the answers with `pagecast_speech_setup` (include `route`, the id of the option they picked). Read its `gaps` back to them and offer the real options. Do not state prices from memory; point to the provider's pricing page (see the speech wiki).
+5. Use only the route they chose, and report which route actually ran. If it stops working, say so and ask again; never switch silently.
+
 On first use read the [bundled LLM wiki](../../llmwiki/index.md), then load
 only the domain references needed for this task.
 

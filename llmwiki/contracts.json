@@ -234,7 +234,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "description": "Original word → single English IPA word wrapped in slashes; keeps reader spelling unchanged."
+                  "description": "Original word \u2192 single English IPA word wrapped in slashes; keeps reader spelling unchanged."
                 }
               },
               "required": [
@@ -361,6 +361,8 @@
           "engine": {
             "type": "string",
             "enum": [
+              "chosen",
+              "system",
               "flite",
               "higgs",
               "inworld",
@@ -371,7 +373,7 @@
           },
           "inworld_options": {
             "type": "object",
-            "description": "Inworld controls: deliveryMode STABLE/BALANCED/CREATIVE, speakingRate 0.5–1.5, language, timestampType WORD/CHARACTER, applyTextNormalization ON/OFF, enhanceGeneration, enableCustomPronunciation, reasoning, pronunciationDictionarySettings (named dictionary resources), reasoningContext (600 characters), previousTexts (five/2000 units), lipsync. TTS-2 ignores temperature; Flash supports temperature instead of steering."
+            "description": "Inworld controls: deliveryMode STABLE/BALANCED/CREATIVE, speakingRate 0.5\u20131.5, language, timestampType WORD/CHARACTER, applyTextNormalization ON/OFF, enhanceGeneration, enableCustomPronunciation, reasoning, pronunciationDictionarySettings (named dictionary resources), reasoningContext (600 characters), previousTexts (five/2000 units), lipsync. TTS-2 ignores temperature; Flash supports temperature instead of steering."
           },
           "voice": {
             "type": "string"
@@ -446,6 +448,7 @@
           "engine": {
             "type": "string",
             "enum": [
+              "system",
               "flite",
               "higgs",
               "inworld",
@@ -684,6 +687,8 @@
           "engine": {
             "type": "string",
             "enum": [
+              "chosen",
+              "system",
               "flite",
               "higgs",
               "inworld",
@@ -694,7 +699,7 @@
           },
           "inworld_options": {
             "type": "object",
-            "description": "Inworld controls: deliveryMode STABLE/BALANCED/CREATIVE, speakingRate 0.5–1.5, language, timestampType WORD/CHARACTER, applyTextNormalization ON/OFF, enhanceGeneration, enableCustomPronunciation, reasoning, pronunciationDictionarySettings (named dictionary resources), reasoningContext (600 characters), previousTexts (five/2000 units), lipsync. TTS-2 ignores temperature; Flash supports temperature instead of steering."
+            "description": "Inworld controls: deliveryMode STABLE/BALANCED/CREATIVE, speakingRate 0.5\u20131.5, language, timestampType WORD/CHARACTER, applyTextNormalization ON/OFF, enhanceGeneration, enableCustomPronunciation, reasoning, pronunciationDictionarySettings (named dictionary resources), reasoningContext (600 characters), previousTexts (five/2000 units), lipsync. TTS-2 ignores temperature; Flash supports temperature instead of steering."
           },
           "voice": {
             "type": "string"
@@ -839,6 +844,21 @@
       "parameters": {
         "type": "object",
         "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "pagecast_speech_setup",
+      "description": "First-use interview and speech check. Without answers: returns what speech this computer has (installed speech programs, speech servers that answer, which online accounts are set up) and the questions to ask the user: what they want to make, natural vs plain voice, whether online and paid services are OK and a budget, what they already have. With answers: saves them and says the route the user chose, which pagecast_voice with engine chosen then uses, and what is missing. The plugin never picks an engine itself: rendering and engine-chosen casting return the options and questions until the user has chosen a route. Sends nothing, spends nothing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "answers": {
+            "type": "object",
+            "description": "needs (text), quality (natural|plain-ok), allow_cloud (bool), allow_paid (bool), budget_usd (number), has (list of local_server, gemini_key, google_cloud_project, elevenlabs_key, inworld_key, host_speech_tool, nothing), voice_notes (text)."
+          }
+        },
         "required": [],
         "additionalProperties": false
       }
