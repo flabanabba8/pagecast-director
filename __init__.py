@@ -101,11 +101,12 @@ def invoke(name, args, settings=None, storage_root=None, speech_dispatch=None, s
         if storage_root is None:
             from plugins.plugin_storage import plugin_data_dir
             storage_root = plugin_data_dir('pagecast-director')
+        raw_settings = settings or {}   # setup and the options list look at everything this computer has, whatever was answered before, so the user can change their mind
         settings = speech_resources.apply_profile(settings or {}, speech_resources.load_profile(Path(storage_root) / 'x'))   # the user's answers (no online services, budget) shape every call
-        if name == 'pagecast_speech_options': return json.dumps(speech_options.speech_options(settings or {}, Books(storage_root, settings, speech_dispatch).speech_resources_report()[0]))
+        if name == 'pagecast_speech_options': return json.dumps(speech_options.speech_options(raw_settings, Books(storage_root, raw_settings, speech_dispatch).speech_resources_report(use_profile=False)[0]))
         if name == 'pagecast_speech_setup':
-            report, _ = Books(storage_root, settings, speech_dispatch).speech_resources_report()
-            return json.dumps(speech_resources.apply_setup(Path(storage_root) / 'x', report, settings or {}, args.get('answers'), args.get('knowledge_updates')))
+            report, _ = Books(storage_root, raw_settings, speech_dispatch).speech_resources_report(use_profile=False)
+            return json.dumps(speech_resources.apply_setup(Path(storage_root) / 'x', report, raw_settings, args.get('answers'), args.get('knowledge_updates')))
         if name in ('pagecast_render', 'pagecast_voice') and (name == 'pagecast_render' or args.get('engine') == 'chosen') and source != 'ui':
             _profile = speech_resources.load_profile(Path(storage_root) / 'x')
             if not _profile or not _profile.get('route'):
@@ -124,7 +125,16 @@ def invoke(name, args, settings=None, storage_root=None, speech_dispatch=None, s
             if name == 'pagecast_preview' and args.get('play') is True: return json.dumps({'error': 'Refused: this connection cannot ask the user before playing sound. Use the file path from a preview without play.'})
         if name == 'pagecast_preview' and source == 'ui' and 'play' not in args: args = {**args, 'play': True}  # the person pressed Preview
         if name == 'pagecast_voice_audition': return json.dumps(voice_audition.audition(books, **args))
-        return json.dumps(getattr(books, METHODS.get(name, name.removeprefix('pagecast_')))(**args))
+        result = getattr(books, METHODS.get(name, name.removeprefix('pagecast_')))(**args)
+        if name == 'pagecast_render' and source != 'ui' and isinstance(result, dict) and isinstance(result.get('speech_used'), list):
+            try:  # say plainly when the render used something other than the voice engine the user chose
+                profile = speech_resources.load_profile(Path(storage_root) / 'x')
+                if profile and profile.get('route'):
+                    chosen = books._chosen_engine()[0]; used = {row.get('engine') for row in result['speech_used']}
+                    if used and chosen != 'system' and chosen not in used:
+                        result['note'] = 'This render used %s, following the cast. The user chose %s in pagecast_speech_setup. To use their choice, cast the speakers with pagecast_voice (engine chosen) and render again.' % (', '.join(sorted(map(str, used))), profile['route'])
+            except (ValueError, KeyError, TypeError): pass
+        return json.dumps(result)
     except (ValueError, TypeError, RuntimeError, OSError) as exc:
         return json.dumps({'error': str(exc)})
 

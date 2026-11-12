@@ -475,9 +475,9 @@ class Books:
         rendering stays blocked until the user has chosen a speech route in pagecast_speech_setup."""
         return {'engine': 'flite', 'voice': 'rms'}
 
-    def speech_resources_report(self):
-        """What speech this computer and profile have; read-only. PageCast can drive these hosted providers."""
-        cfg = speech_resources.apply_profile(self.settings, speech_resources.load_profile(self.root / 'x'))
+    def speech_resources_report(self, use_profile=True):
+        """What speech this computer and profile have; read-only. PageCast can drive these hosted providers. use_profile=False (setup) shows everything, so the user can change an earlier answer."""
+        cfg = speech_resources.apply_profile(self.settings, speech_resources.load_profile(self.root / 'x')) if use_profile else dict(self.settings or {})
         secrets = lambda n: bool(self._secret_present(n))
         report = speech_resources.discover(cfg, secret_present=secrets, hosted=('gemini', 'elevenlabs', 'inworld'))
         if str(cfg.get('gemini_route', '')) != 'vertex': report['backends'] = [b for b in report['backends'] if b['id'] != 'gemini:vertex']
@@ -499,7 +499,12 @@ class Books:
         pick = speech_resources.chosen(report, profile)
         if pick is None: raise ValueError('The speech route the user chose (%s) is not available now. Ask them to choose again (pagecast_speech_setup). %s' % (profile['route'], report['advice']))
         if pick['kind'] == 'system': return 'system', {'tool': pick['tool']}
-        if pick['kind'] == 'server': raise ValueError('The chosen speech server needs a reference clip for each speaker; cast with engine higgs and a reference (see pagecast_voice_audition) instead.')
+        if pick['kind'] == 'server':
+            url = pick['id'].split(':', 1)[1].rstrip('/')
+            set_url = str(self.settings.get('higgs_url', 'http://localhost:8000')).rstrip('/')
+            same = lambda u: u.replace('localhost', '127.0.0.1') == url.replace('localhost', '127.0.0.1')
+            if not same(set_url): raise ValueError('The speech server the user chose answers at %s, but the plugin setting higgs_url is %s. Ask the user to set higgs_url to %s in the plugin settings, then try again.' % (url, set_url, url))
+            return 'higgs', {}
         if pick['kind'] == 'host': return 'host', {}
         name = pick['id']
         if name.startswith('gemini:'): return 'gemini', {'route': name.split(':')[1]}

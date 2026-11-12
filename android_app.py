@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import urllib.request
+from .process_env import process_env
 from pathlib import Path
 
 REPO = 'flabanabba8/PageCast'
@@ -38,7 +39,7 @@ def _adb(runner=None):
     def run(*args, timeout=180):
         if runner: return runner(args)
         if not binary: raise ValueError('adb is not installed on this computer. ' + SIDELOAD)
-        try: done = subprocess.run([binary, *args], capture_output=True, text=True, timeout=timeout)
+        try: done = subprocess.run([binary, *args], capture_output=True, text=True, timeout=timeout, env=process_env())
         except subprocess.TimeoutExpired: raise ValueError('The phone did not answer in time; check that it is unlocked and still connected') from None
         return done.returncode, (done.stdout + done.stderr).strip()
     return binary or bool(runner), run

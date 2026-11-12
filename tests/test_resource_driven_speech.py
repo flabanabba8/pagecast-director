@@ -24,6 +24,10 @@ def tools(*names):
 
 
 class FirstUse(unittest.TestCase):
+    def setUp(self):
+        # hermetic: a speech server that happens to be running on this machine must not change what the tests expect
+        patcher = patch.object(sr, 'find_servers', lambda urls, probe=True: []); patcher.start(); self.addCleanup(patcher.stop)
+
     def test_render_and_chosen_cast_ask_which_voice_first_and_pick_nothing(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(sr, 'system_tools', tools('flite', 'espeak-ng')):
             book = Books(tmp).import_book(text='Hello there.')['book_id']
@@ -35,6 +39,15 @@ class FirstUse(unittest.TestCase):
             self.assertEqual(call('pagecast_voice', {'book_id': book, 'speaker': 'Narrator', 'engine': 'chosen'}, tmp)['state'], 'interview_needed')
             # a person in the dashboard is not interrogated by the model-facing gate
             self.assertNotEqual(call('pagecast_render', {'book_id': book}, tmp, source='ui').get('state'), 'interview_needed')
+
+    def test_changing_your_mind_after_a_no_online_answer_shows_the_online_options_again(self):
+        import os
+        with tempfile.TemporaryDirectory() as tmp, patch.object(sr, 'system_tools', tools('flite')), patch.dict(os.environ, {'INWORLD_API_KEY': 'dGVzdA=='}):
+            saved = call('pagecast_speech_setup', {'answers': {**ANSWERS, 'route': 'system:flite'}}, tmp)
+            self.assertEqual(saved['state'], 'saved')   # allow_cloud was False
+            again = call('pagecast_speech_setup', {}, tmp)
+            self.assertIn('inworld', {o['id'] for o in again['options']})
+            self.assertEqual(call('pagecast_speech_setup', {'answers': {**ANSWERS, 'allow_cloud': True, 'allow_paid': True, 'budget_usd': 0.1, 'route': 'inworld'}}, tmp)['state'], 'saved')
 
     def test_answers_without_a_route_are_refused_and_with_one_the_gate_opens(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(sr, 'system_tools', tools('flite')):
@@ -102,6 +115,22 @@ class ChosenEngine(unittest.TestCase):
             self.assertTrue(audio)
             with wave.open(str(audio[0])) as w:
                 self.assertGreater(w.getnframes(), 1000)
+
+class ChosenServer(unittest.TestCase):
+    def books(self, tmp, url):
+        profile = {'answered': True, 'route': 'server:http://127.0.0.1:8000', 'allow_cloud': False, 'allow_paid': False, 'budget_usd': 0}
+        self.enterContext(patch.object(sr, 'load_profile', lambda root: profile))
+        self.enterContext(patch.object(sr, 'find_servers', lambda urls, probe=True: [{'url': 'http://127.0.0.1:8000', 'models': ['bosonai/higgs-tts-3-4b']}]))
+        return Books(tmp, {'higgs_url': url})
+
+    def test_a_chosen_local_higgs_server_resolves_to_the_higgs_engine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.books(tmp, 'http://localhost:8000')._chosen_engine(), ('higgs', {}))
+
+    def test_a_server_at_another_address_asks_for_the_setting_instead_of_guessing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as caught: self.books(tmp, 'http://localhost:9000')._chosen_engine()
+            self.assertIn('higgs_url', str(caught.exception))
 
 
 if __name__ == '__main__':

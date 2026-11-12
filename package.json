@@ -1,6 +1,6 @@
 {
   "name": "pagecast-director",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Spoiler-safe cast audiobooks with the current harness model, hosted speech or local Higgs 3, and offline PageCast Android read-along.",
   "license": "GPL-3.0-or-later",
   "private": true,

@@ -13,6 +13,7 @@ Policy (the reason this module exists):
 This file is shared verbatim by creator-studio and pagecast-director; keep the two copies identical.
 """
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -26,14 +27,19 @@ SYSTEM_TOOLS = ('piper', 'say', 'sapi', 'espeak-ng', 'flite')
 DEFAULT_VOICE = {'piper': 'default', 'say': 'Samantha', 'sapi': 'default', 'espeak-ng': 'en-us', 'flite': 'rms'}
 
 
+DECLARED_SECRETS = ('GEMINI_API_KEY',)   # the secrets this plugin declares in its manifest; nothing else is ever read
+
+
 def read_secret(name):
-    """Value of a secret from Hermes's profile scope (falls back to the environment); '' when absent.
-    Callers must never log or return it."""
+    """Value of one of THIS plugin's declared secrets, through Hermes's profile scope (agent.secret_scope); '' when absent or undeclared.
+    Never reads the environment, a .env file or another service's key. Callers must never log or return the value."""
+    if name not in DECLARED_SECRETS:
+        return ''
     try:
         from agent.secret_scope import get_secret
         value = get_secret(name)
     except Exception:
-        value = os.environ.get(name)
+        return ''
     return value.strip() if isinstance(value, str) else ''
 
 
@@ -86,6 +92,13 @@ def find_servers(extra_urls=(), probe=True):
     return found
 
 
+def minimal_env(extra=None):
+    """Environment for every subprocess this module starts: no provider keys or other secrets from the host. PATH, HOME and LANG only."""
+    env = {'PATH': os.environ.get('PATH', ''), 'HOME': os.path.expanduser('~'), 'LANG': 'C'}
+    env.update(extra or {})
+    return env
+
+
 def system_tools(which=shutil.which, platform=None, piper_model=''):
     """Speech programs already installed. 'piper' also needs a voice model file; 'sapi' is Windows' built-in voice."""
     platform = platform or sys.platform
@@ -103,6 +116,14 @@ def system_tools(which=shutil.which, platform=None, piper_model=''):
     return out
 
 
+ASR_MODEL = re.compile(r'(?i)whisper|parakeet|wav2vec|canary|moonshine|sensevoice|paraformer|(^|[^a-z])asr([^a-z]|$)|speech-to-text|voxtral-mini-transcribe')
+
+
+def _only_recognition(models):
+    """A server whose every model is a speech RECOGNITION model cannot speak, so it is not offered as a voice."""
+    return bool(models) and all(isinstance(m, str) and ASR_MODEL.search(m) for m in models)
+
+
 def discover(settings=None, secret_present=None, which=shutil.which, platform=None, probe=True, hosted=('gemini', 'elevenlabs', 'inworld')):
     """Return {'backends': [...], 'free_ready': [...], 'advice': str}. Nothing is ranked or recommended.
 
@@ -110,7 +131,7 @@ def discover(settings=None, secret_present=None, which=shutil.which, platform=No
     settings: the plugin's settings dict. secret_present(name) -> bool: whether a named secret exists (value never read).
     """
     s = settings or {}
-    has = secret_present or (lambda name: bool(os.environ.get(name)))
+    has = secret_present or (lambda name: False)   # presence of a secret is only ever reported for secrets the caller passes in
     backends = []
     for tool, path in system_tools(which, platform, str(s.get('piper_model', ''))).items():
         backends.append({'id': 'system:' + tool, 'kind': 'system', 'tool': tool, 'ready': True, 'free': True, 'local': True,
@@ -118,7 +139,7 @@ def discover(settings=None, secret_present=None, which=shutil.which, platform=No
     if 'piper' not in {b['tool'] for b in backends} and which('piper'):
         backends.append({'id': 'system:piper', 'kind': 'system', 'tool': 'piper', 'ready': False, 'free': True, 'local': True,
                          'detail': 'installed, but needs a voice model file: set piper_model to a local .onnx path'})
-    for server in find_servers([s.get('speech_http_url', ''), s.get('higgs_url', '')], probe):
+    for server in [x for x in find_servers([s.get('speech_http_url', ''), s.get('higgs_url', '')], probe) if not _only_recognition(x.get('models'))]:
         backends.append({'id': 'server:' + server['url'], 'kind': 'server', 'ready': True, 'free': True, 'local': True,
                          'models': server['models'], 'detail': 'speech server answering on this computer'})
     gem_key = has('GEMINI_API_KEY')
@@ -196,7 +217,7 @@ def synthesize_system(tool, text, voice, out_path, which=shutil.which, run=subpr
     if not isinstance(voice, str) or not voice[:1].isalnum() or len(voice) > 128 or not all(c.isalnum() or c in ' _.:+-' for c in voice):
         raise ValueError('Voice names use letters, digits and _ . : + - only')
     out = str(out_path)
-    env = dict(os.environ)
+    env = minimal_env()
     if tool == 'espeak-ng':
         exe = which('espeak-ng') or which('espeak')
         argv = [exe, '-v', voice, '-w', out, '--stdin']
@@ -236,14 +257,14 @@ def system_voices(tool, which=shutil.which, run=subprocess.run):
     """Voice names an installed program can use (best effort, bounded). Used to give speakers different voices."""
     try:
         if tool == 'flite':
-            out = run([which('flite'), '-lv'], capture_output=True, text=True, timeout=10).stdout
+            out = run([which('flite'), '-lv'], capture_output=True, text=True, timeout=10, env=minimal_env()).stdout
             names = out.split(':', 1)[-1].split()
             return [n for n in names if n.replace('_', '').isalnum()][:12] or ['rms']
         if tool == 'espeak-ng':
             # base voices plus male/female variants: distinct enough to tell speakers apart
             return ['en-us+m3', 'en-us+f3', 'en-gb+m5', 'en-gb+f5', 'en-us+m7', 'en-us+f2']
         if tool == 'say':
-            out = run([which('say'), '-v', '?'], capture_output=True, text=True, timeout=10).stdout
+            out = run([which('say'), '-v', '?'], capture_output=True, text=True, timeout=10, env=minimal_env()).stdout
             names = [line.split('  ')[0].strip() for line in out.splitlines() if line.strip().startswith(('Samantha', 'Daniel', 'Karen', 'Moira', 'Alex', 'Fred', 'Victoria', 'Tessa'))]
             return names[:8] or ['Samantha']
     except Exception:
@@ -450,7 +471,7 @@ def hardware(run=subprocess.run, platform=None, which=shutil.which, read_text=No
 
     def out(argv, timeout=15):
         try:
-            r = run(argv, capture_output=True, text=True, timeout=timeout)
+            r = run(argv, capture_output=True, text=True, timeout=timeout, env=minimal_env())
             return r.stdout if r.returncode == 0 else ''
         except Exception:
             return ''
