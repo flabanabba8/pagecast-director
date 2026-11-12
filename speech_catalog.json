@@ -1415,5 +1415,32 @@
       "source": "https://github.com/pinokiofactory",
       "verified": "2026-11-12"
     }
+  ],
+  "expiries": [
+    {
+      "date": "2026-11-16",
+      "what": "Google Cloud $300 welcome credit can no longer pay for Vertex AI Gemini services on accounts created or upgraded on or after this date",
+      "source": "https://cloud.google.com/free/docs/free-cloud-features"
+    },
+    {
+      "date": "2026-11-30",
+      "what": "Fish Audio free-model promotion ends (per PageCast notes of 2026-09-15; not re-verified)",
+      "source": "https://fish.audio/blog/s2-1-pro-free-api/"
+    },
+    {
+      "date": "2026-12-31",
+      "what": "Gemini 3.8 TTS promotional prices end and double on 2027-01-01 (Developer API and Vertex)",
+      "source": "https://aistudio.google.com/docs/pricing"
+    },
+    {
+      "date": "2026-12-31",
+      "what": "ElevenLabs retires its current default voices",
+      "source": "https://help.elevenlabs.io/hc/en-us/articles/26942950589969-What-are-Default-voices"
+    },
+    {
+      "date": "2027-01-06",
+      "what": "OpenAI legacy text-to-speech models (gpt-4o-mini-tts, tts-1, tts-1-hd) shut down, per PageCast notes (not re-verified)",
+      "source": "https://developers.openai.com/api/docs/guides/text-to-speech"
+    }
   ]
 }

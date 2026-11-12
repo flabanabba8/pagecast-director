@@ -389,16 +389,37 @@ def interview(settings, root, report, answers=None):
     Sends nothing, spends nothing, and never picks a route for the user."""
     options = ready_options(filter_report(report, settings))
     if answers is not None:
+        if options and not (isinstance(answers, dict) and answers.get('route')):
+            raise ValueError('Ask the user which of these routes to use and pass it as route (nothing was saved): ' + ', '.join(o['id'] for o in options))
         profile = save_profile(root, answers, {o['id'] for o in options} if options else None)
-        if options and not profile['route']:
-            raise ValueError('Ask the user which of these routes to use and pass it as route: ' + ', '.join(o['id'] for o in options))
         return {'state': 'saved', 'profile': profile, 'you_chose': profile['route'], 'gaps': gaps(report, profile), 'found': report['backends']}
     existing = load_profile(root)
     questions = list(QUESTIONS)
     questions.append({'key': 'route', 'ask': 'Which of these do you want to use for speech? I will use only the one you pick.', 'type': 'choice', 'choices': options})
     state = 'interview_needed' if not existing or (options and not existing.get('route')) else 'answered'
-    return {'state': state, 'profile': existing, 'found': report['backends'], 'options': options, 'recommendations': recommend(hardware(), allow_cloud=not existing or existing.get('allow_cloud', True)), 'advice': report['advice'], 'questions': questions,
-            'instructions_for_agent': 'Do not choose a speech engine for the user. Show them the options found on this computer in plain words (what each is, whether the text stays here or goes online, whether it is free). Then show `recommendations` as suggestions, not a decision: for online speech the suggested order (Gemini 3.8 Flash TTS for the best quality, then Inworld, then ElevenLabs) with the free allowance of each and its verified date; and for local speech the models that fit the hardware of this computer, which may need installing first (offer to help, never install without being asked). Quote free allowances and prices only with their source and date, and tell the user to re-check the link. Ask which one they want, together with the other questions, in one short message. Do not ask for or accept key values in chat. Then call the speech setup tool again with answers = {needs, quality, allow_cloud, allow_paid, budget_usd, has, voice_notes, route}. If no option exists, explain how to get one and stop. Do not start narration until the answers are saved.'}
+    return {'state': state, 'profile': existing, 'found': report['backends'], 'options': options, 'recommendations': recommend(hardware(), load_catalog(update_root=root), allow_cloud=not existing or existing.get('allow_cloud', True)), 'knowledge_freshness': speech_freshness(root), 'advice': report['advice'], 'questions': questions,
+            'instructions_for_agent': 'Do not choose a speech engine for the user. Show them the options found on this computer in plain words (what each is, whether the text stays here or goes online, whether it is free). Then show `recommendations` as suggestions, not a decision: for online speech the suggested order (Gemini 3.8 Flash TTS for the best quality, then Inworld, then ElevenLabs) with the free allowance of each and its verified date; and for local speech the models that fit the hardware of this computer, which may need installing first (offer to help, never install without being asked). Quote free allowances and prices only with their source and date, and tell the user to re-check the link. Also read `knowledge_freshness`: if it says stale (or something is coming up), follow its offer: tell the user what may be old and ask whether they want you to research the current facts online; never research without their yes. Ask which one they want, together with the other questions, in one short message. Do not ask for or accept key values in chat. Then call the speech setup tool again with answers = {needs, quality, allow_cloud, allow_paid, budget_usd, has, voice_notes, route}. If no option exists, explain how to get one and stop. Do not start narration until the answers are saved.'}
+
+
+def speech_freshness(root, today=None):
+    cat = load_catalog(update_root=root)
+    return freshness(cat.get('verified'), cat.get('expiries', []), cat.get('last_refresh'), today)
+
+
+def apply_setup(root, report, settings, answers=None, knowledge_updates=None):
+    """Shared body of every speech setup tool: optionally store user-approved research, then run the interview."""
+    saved = None
+    if knowledge_updates is not None:
+        saved = len(save_updates(root, knowledge_updates, known_ids())['updates'])
+    out = interview(settings, root, report, answers)
+    if saved is not None:
+        out['knowledge_updates_saved'] = len(knowledge_updates)
+    return out
+
+
+def known_ids():
+    cat = load_catalog()
+    return {r['id'] for k in ('remote', 'local', 'servers', 'other_remote_with_free_tiers') for r in cat.get(k, [])}
 
 
 def filter_report(report, settings):
@@ -486,13 +507,20 @@ def usable_gpu_memory(hw):
 REMOTE_ORDER = ('gemini', 'inworld', 'elevenlabs')   # the maintainers' quality order for hosted speech; a suggestion, never a choice
 
 
-def load_catalog(path=None):
+def load_catalog(path=None, update_root=None):
+    """The shipped catalog, with the user's approved research updates laid over it when update_root is given."""
     from pathlib import Path
     path = Path(path) if path else Path(__file__).resolve().parent / 'speech_catalog.json'
     try:
-        return json.loads(path.read_text())
+        cat = json.loads(path.read_text())
     except (OSError, ValueError):
-        return {'verified': None, 'remote': [], 'local': []}
+        return {'verified': None, 'remote': [], 'local': [], 'servers': [], 'expiries': []}
+    if update_root is not None:
+        data = load_updates(update_root)
+        for key in ('remote', 'local', 'servers', 'other_remote_with_free_tiers'):
+            apply_updates(cat.get(key, []), data['updates'])
+        cat['last_refresh'] = data.get('last_refresh')
+    return cat
 
 
 def recommend(hw, catalog=None, allow_cloud=True):
@@ -542,3 +570,111 @@ def recommend(hw, catalog=None, allow_cloud=True):
     return {'hardware': hw, 'remote_in_suggested_order': remote, 'other_online_services_with_free_tiers': cat.get('other_remote_with_free_tiers', []) if allow_cloud else [], 'local_that_fit_this_computer': local[:12],
             'catalog_verified': cat.get('verified'),
             'note': 'Suggestions only; the user chooses. Free-tier and price facts were checked on the dates shown and change often: re-check the source link before quoting them. Nothing was downloaded or installed.'}
+
+
+# ---- knowledge freshness (generic block; identical in modlab/resources.py) ----
+import datetime as _dt
+MAX_AGE_DAYS = 30
+UPDATE_FIELDS = ('free_tier', 'paid', 'needs', 'caveats', 'models', 'min_vram_gb', 'vram_basis', 'min_ram_gb', 'license', 'commercial', 'cloning', 'languages',
+                 'status', 'notes', 'openai_endpoint', 'openai_style', 'install', 'platforms', 'how_to_run', 'smaller_variants', 'gpu_requirements', 'recommend')
+
+
+def _today(today=None):
+    return today or _dt.date.today()
+
+
+def _parse_day(text):
+    try:
+        return _dt.date.fromisoformat(str(text))
+    except ValueError:
+        return None
+
+
+def freshness(verified, expiries=(), last_refresh=None, today=None, max_age_days=MAX_AGE_DAYS):
+    """Is the shipped knowledge out of date? Returns {'verified', 'age_days', 'stale', 'reasons', 'coming_up', 'offer'}.
+    Stale when older than max_age_days (counting the latest user-approved research refresh) or when a known deadline has passed."""
+    now = _today(today)
+    days = [d for d in (_parse_day(verified), _parse_day(last_refresh)) if d]
+    newest = max(days) if days else None
+    age = (now - newest).days if newest else None
+    reasons, coming = [], []
+    if age is None:
+        reasons.append('the knowledge has no verification date')
+    elif age > max_age_days:
+        reasons.append('it was last checked %d days ago (checked %s; this plugin treats more than %d days as stale)' % (age, newest.isoformat(), max_age_days))
+    for e in expiries:
+        d = _parse_day(e.get('date'))
+        if not d:
+            continue
+        if d <= now:
+            reasons.append('a known deadline has passed (%s): %s' % (d.isoformat(), e.get('what')))
+        elif (d - now).days <= max_age_days:
+            coming.append('%s (%s): %s' % (d.isoformat(), '%d days away' % (d - now).days, e.get('what')))
+    stale = bool(reasons)
+    offer = None
+    if stale or coming:
+        offer = ('Some of this built-in knowledge may be out of date%s. Tell the user plainly what may have changed and ASK whether they want you to research '
+                 'the current facts on the internet now, using the source links in the wiki (primary pages only). Do not research without their yes. If they say yes, '
+                 'read the primary pages, then save only what you verified with the setup tool\'s knowledge_updates argument (each with its source link and date), '
+                 'and tell the user what changed and what you could not verify. If they say no, carry on and say the numbers may be old.') % (' (' + '; '.join(reasons) + ')' if reasons else '')
+    return {'verified': newest.isoformat() if newest else None, 'age_days': age, 'stale': stale, 'reasons': reasons, 'coming_up': coming, 'offer': offer}
+
+
+def _updates_path(root):
+    return profile_path(root).parent / 'knowledge-updates.json'
+
+
+def load_updates(root):
+    try:
+        data = json.loads(_updates_path(root).read_text())
+        return data if isinstance(data, dict) and isinstance(data.get('updates'), list) else {'updates': [], 'last_refresh': None}
+    except (OSError, ValueError):
+        return {'updates': [], 'last_refresh': None}
+
+
+def save_updates(root, updates, known_ids, today=None):
+    """Store research results the user approved. Each update: {id, field, value, source (https URL), date}. Nothing is trusted blindly:
+    unknown ids/fields, non-https sources, future dates and oversized values are refused. Returns the stored file contents."""
+    now = _today(today)
+    if not isinstance(updates, list) or not 1 <= len(updates) <= 100:
+        raise ValueError('knowledge_updates must be a list of 1 to 100 items')
+    clean = []
+    for u in updates:
+        if not isinstance(u, dict) or set(u) - {'id', 'field', 'value', 'source', 'date', 'note'}:
+            raise ValueError('each update needs id, field, value, source and date (note is optional)')
+        if u.get('id') not in known_ids:
+            raise ValueError('unknown id "%s"; use an id from the wiki tables' % u.get('id'))
+        if u.get('field') not in UPDATE_FIELDS:
+            raise ValueError('field "%s" cannot be updated; allowed: %s' % (u.get('field'), ', '.join(UPDATE_FIELDS)))
+        value = u.get('value')
+        if not (isinstance(value, (str, bool, int, float, list)) or value is None) or len(json.dumps(value)) > 1500:
+            raise ValueError('value is too large or not plain data')
+        src = u.get('source')
+        if not isinstance(src, str) or not src.startswith('https://') or len(src) > 500:
+            raise ValueError('every update needs the https source page it was verified on')
+        day = _parse_day(u.get('date'))
+        if not day or day > now:
+            raise ValueError('every update needs the date you read the source (not in the future)')
+        clean.append({'id': u['id'], 'field': u['field'], 'value': value, 'source': src, 'date': day.isoformat(), 'note': str(u.get('note', ''))[:300]})
+    data = load_updates(root)
+    data['updates'] = (data['updates'] + clean)[-500:]
+    data['last_refresh'] = max(c['date'] for c in clean)
+    path = _updates_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.chmod(0o600)
+    tmp.replace(path)
+    return data
+
+
+def apply_updates(rows, updates):
+    """Overlay approved research on catalog rows (the shipped catalog file is never modified). Later updates win."""
+    by = {r['id']: r for r in rows}
+    for u in updates:
+        r = by.get(u['id'])
+        if r is not None:
+            r[u['field']] = u['value']
+            r.setdefault('updated_by_research', {})[u['field']] = {'source': u['source'], 'date': u['date']}
+    return rows
+# ---- end knowledge freshness ----

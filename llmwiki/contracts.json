@@ -856,7 +856,15 @@
         "properties": {
           "answers": {
             "type": "object",
-            "description": "needs (text), quality (natural|plain-ok), allow_cloud (bool), allow_paid (bool), budget_usd (number), has (list of local_server, gemini_key, google_cloud_project, elevenlabs_key, inworld_key, host_speech_tool, nothing), voice_notes (text)."
+            "description": "needs (text), quality (natural|plain-ok), allow_cloud (bool), allow_paid (bool), budget_usd (number), has (list of local_server, gemini_key, google_cloud_project, elevenlabs_key, inworld_key, host_speech_tool, nothing), voice_notes (text), route (the id of the option the user picked)."
+          },
+          "knowledge_updates": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object"
+            },
+            "description": "Only after the user said yes to online research: facts you verified on primary pages. Each item: id (from the speech wiki tables), field, value, source (https page), date (the day you read it). Saved as dated overrides; the shipped catalog is unchanged."
           }
         },
         "required": [],

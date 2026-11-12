@@ -211,19 +211,40 @@ Not TTS servers, or not what they seem:
 - Online: Gemini (API key, or Vertex with the Hermes sign-in); in PageCast also Inworld and ElevenLabs.
 - Anything else in the tables needs a server or an adapter first. Say so; never claim support that is not there.
 
-## 6. Refresh procedure
+## 6. Staleness: how the plugin checks its own knowledge, and how it is refreshed
 
-1. Open the source link of the row you are about to quote; if the number or date differs, tell the user and update
-   `speech_catalog.json` and this page together (this page is generated from the catalog so they cannot drift).
-2. Primary pages used: aistudio.google.com/docs/pricing, cloud.google.com/text-to-speech/pricing,
-   cloud.google.com/free/docs/free-cloud-features, inworld.ai/pricing, elevenlabs.io/pricing and its legal help page,
-   aws.amazon.com/polly/pricing, azure.microsoft.com Speech pricing, cartesia.ai/pricing, deepgram.com/pricing, plus each
-   model's Hugging Face card or GitHub README and each server's README (links in the tables).
-3. Still UNVERIFIED on 2026-11-12: the Gemini 3.8 TTS free-tier rate limit (shown only in the AI Studio console), whether
-   Inworld's 70 free minutes are one-time or monthly, ElevenLabs credits per character and whether its free plan needs a
-   card, TTS rates for OpenAI, Hume, Cartesia and Deepgram, a stated VRAM for Higgs TTS 3, Qwen3-TTS, Kyutai, F5-TTS,
-   XTTS-v2 and VibeVoice-Realtime, OpenAI-style cloning over HTTP for mlx-audio and Chatterbox-TTS-Server, and Windows
-   support for LocalAI and for Phonon in Ollama.
+The setup tools return `knowledge_freshness`. Knowledge counts as **stale** when it was last checked more than 30
+days ago (counting any research the user approved) or when a known deadline has passed. Deadlines the catalog knows:
+
+| Date | What changes | Source |
+|---|---|---|
+| 2026-11-16 | Google Cloud $300 welcome credit can no longer pay for Vertex AI Gemini services on accounts created or upgraded on or after this date | https://cloud.google.com/free/docs/free-cloud-features |
+| 2026-11-30 | Fish Audio free-model promotion ends (per PageCast notes of 2026-09-15; not re-verified) | https://fish.audio/blog/s2-1-pro-free-api/ |
+| 2026-12-31 | Gemini 3.8 TTS promotional prices end and double on 2027-01-01 (Developer API and Vertex) | https://aistudio.google.com/docs/pricing |
+| 2026-12-31 | ElevenLabs retires its current default voices | https://help.elevenlabs.io/hc/en-us/articles/26942950589969-What-are-Default-voices |
+| 2027-01-06 | OpenAI legacy text-to-speech models (gpt-4o-mini-tts, tts-1, tts-1-hd) shut down, per PageCast notes (not re-verified) | https://developers.openai.com/api/docs/guides/text-to-speech |
+
+When something is stale or a deadline is within 30 days, the plugin tells the user what may be old and **asks whether
+they want you to research the current facts online. Never research without their yes.** If they agree:
+
+1. Open the source link of each affected row (primary pages only) and read the current figure and its date.
+2. Save only what you verified with the setup tool's `knowledge_updates` argument: `{id, field, value, source, date}`
+   (id from the tables above). These are stored as dated overrides in the user's plugin data and shown in place of the
+   shipped values; the shipped catalog file is not modified. Unknown ids or fields, non-https sources and future dates
+   are refused.
+3. Tell the user what changed and what you could not verify; leave those rows as they are.
+4. To refresh the shipped catalog for everyone, update `speech_catalog.json` and regenerate this page from it.
+
+Primary pages used for the shipped data: aistudio.google.com/docs/pricing, cloud.google.com/text-to-speech/pricing,
+cloud.google.com/free/docs/free-cloud-features, inworld.ai/pricing, elevenlabs.io/pricing and its legal help page,
+aws.amazon.com/polly/pricing, azure.microsoft.com Speech pricing, cartesia.ai/pricing, deepgram.com/pricing, plus each
+model's Hugging Face card or GitHub README and each server's README (links in the tables).
+
+Still UNVERIFIED on 2026-11-12: the Gemini 3.8 TTS free-tier rate limit (shown only in the AI Studio console), whether
+Inworld's 70 free minutes are one-time or monthly, ElevenLabs credits per character and whether its free plan needs a
+card, TTS rates for OpenAI, Hume, Cartesia and Deepgram, a stated VRAM for Higgs TTS 3, Qwen3-TTS, Kyutai, F5-TTS,
+XTTS-v2 and VibeVoice-Realtime, OpenAI-style cloning over HTTP for mlx-audio and Chatterbox-TTS-Server, and Windows
+support for LocalAI and for Phonon in Ollama.
 
 ## 7. Evidence boundary
 

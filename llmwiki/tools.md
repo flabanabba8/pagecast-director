@@ -183,5 +183,5 @@ Inputs: .
 
 First-use interview and speech check. Without answers: returns what speech this computer has (installed speech programs, speech servers that answer, which online accounts are set up) and the questions to ask the user: what they want to make, natural vs plain voice, whether online and paid services are OK and a budget, what they already have. With answers: saves them and says the route the user chose, which pagecast_voice with engine chosen then uses, and what is missing. The plugin never picks an engine itself: rendering and engine-chosen casting return the options and questions until the user has chosen a route. Sends nothing, spends nothing.
 
-Inputs: `answers` (optional).
+Inputs: `answers` (optional), `knowledge_updates` (optional).
 
