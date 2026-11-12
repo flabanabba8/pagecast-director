@@ -576,7 +576,9 @@ def recommend(hw, catalog=None, allow_cloud=True):
 import datetime as _dt
 MAX_AGE_DAYS = 30
 UPDATE_FIELDS = ('free_tier', 'paid', 'needs', 'caveats', 'models', 'min_vram_gb', 'vram_basis', 'min_ram_gb', 'license', 'commercial', 'cloning', 'languages',
-                 'status', 'notes', 'openai_endpoint', 'openai_style', 'install', 'platforms', 'how_to_run', 'smaller_variants', 'gpu_requirements', 'recommend')
+                 'status', 'notes', 'openai_endpoint', 'openai_style', 'install', 'platforms', 'how_to_run', 'smaller_variants', 'gpu_requirements', 'recommend',
+                 'cost', 'price', 'limits', 'finding', 'rules', 'meaning', 'transparent_background', 'reference_image_edit', 'timestamps', 'subtitle_output', 'diarization',
+                 'data_use', 'works_with_this_plugin', 'word_timestamps', 'rtf', 'free_minutes')
 
 
 def _today(today=None):
@@ -607,7 +609,8 @@ def freshness(verified, expiries=(), last_refresh=None, today=None, max_age_days
         if not d:
             continue
         if d <= now:
-            reasons.append('a known deadline has passed (%s): %s' % (d.isoformat(), e.get('what')))
+            if newest is None or d > newest:   # a deadline that passed before the last check is already reflected in what was checked
+                reasons.append('a known deadline has passed (%s): %s' % (d.isoformat(), e.get('what')))
         elif (d - now).days <= max_age_days:
             coming.append('%s (%s): %s' % (d.isoformat(), '%d days away' % (d - now).days, e.get('what')))
     stale = bool(reasons)
