@@ -41,3 +41,6 @@ Derived from the packaged [README](../README.md), [manifest](../plugin.yaml),
 registered tool schemas and the tests listed in provenance.json. Existing
 verification records describe their own dated scope; no new live capability
 was inferred from this documentation review.
+
+## Audiogram clips (0.5.0)
+To promote a produced chapter, list it with pagecast_timeline (chapter, include_text), let the user or the model choose the passage, preview with pagecast_audiogram dry_run, then render. The span snaps outward to whole passages; 5 s to 3 min; cover only from a user-named image; captions use word timing when the render kept it and are estimated otherwise; speaker names follow the reveal rule. Local FFmpeg only, no upload, no speech, no cost; repeat the rights notice.

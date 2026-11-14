@@ -1,6 +1,6 @@
 name: pagecast-director
-version: "0.4.1"
-description: "Editable cast narration with locked voices, source passage IDs, resumable synthesis and selective regeneration."
+version: "0.5.0"
+description: "Editable cast narration with locked voices, source passage IDs, resumable synthesis and selective regeneration, plus short captioned audiogram clips for promotion (needs your FFmpeg)."
 author: "PageCast Director contributors"
 license: GPL-3.0-or-later
 requires_hermes: ">=0.22.3"
@@ -53,6 +53,7 @@ provides_tools:
   - pagecast_timeline
   - pagecast_usage
   - pagecast_inworld_voices
+  - pagecast_audiogram
 config_schema:
   inworld_api_key: {type: secret, env: INWORLD_API_KEY, required: false, label: "Inworld API credential", description: "Complete Base64 credential copied from Inworld Portal. Stored by Hermes, never in book data."}
   inworld_model: {type: str, default: "inworld-tts-2", choices: [inworld-tts-2, inworld-tts-2-flash], description: "Hosted Inworld speech model; synthesis sends text/voice IDs to Inworld and consumes your account credits."}

@@ -2,6 +2,14 @@
 
 Development checks on 2026-11-06. No publication; bounded live Inworld synthesis requests were made using the configured account.
 
+## 0.5.0 - audiogram clips (2026-11-13)
+
+New tool `pagecast_audiogram` (captioned MP4 + SRT of a span of one rendered chapter) and an optional `chapter` argument on `pagecast_timeline`.
+
+Tested: 15 new Python tests in tests/test_audiogram.py that run the real local FFmpeg 8.0.1 on a generated chapter (sine-tone WAV cache entries with hand-made receipts and word timing): span snapping by passage id, seconds and words; ffprobe size, H.264/yuv420p/AAC and length for vertical, square and wide; fade in and out measured on the audio; caption times relative to the clip and word-timed versus estimated captions; quotes, colons, backslashes, ASS codes, percent signs, shell characters, emoji, CJK and Arabic in the text and in the book title; cover versus none, waveform, bad and fake cover files; chapter not produced or half produced; missing timing; too short, too long (cap 180 s) and bad ranges; speaker names under the reveal rule and none for a one-voice chapter; FFmpeg or filters missing; chapter view of the timeline. Full suite: 128 Python tests pass; the Node desktop and reader tests pass; `tools/check-plugin-workflows.py` reports ok.
+
+Real run (no speech was generated, no paid call): the existing Inworld-rendered "Benny the Bear" chapter from the contest evidence (19 passages, 92.9 s, four voices) was copied into a temporary plugin-data folder; its first scene picture served as the cover. A vertical and a wide clip of 30.8 s (passages 3 to 9) with waveform were made (15 to 19 s encode each). Four frames of each were viewed: text readable and inside the frame, cover placed and blurred behind, captions switching at the passage times from the timing data (3.81, 10.23, 13.21, 17.09, 19.46 s), which also match the silence gaps in the encoded audio. Not tested: a chapter with provider word timing (that path is covered by the generated fixture only; the real chapter has none, so its captions were estimated within passages and the result said so); emoji glyph appearance and right-to-left shaping on screen (the render does not fail, the glyphs were not inspected); players and upload sites; Windows or macOS; FFmpeg builds other than the one installed here; a very long encode.
+
 ## 0.4.1 - maintainer review (2026-11-12)
 
 Maintainer review. Declared GEMINI_API_KEY read only through agent.secret_scope; every subprocess (including adb) gets a minimal environment; speech discovery makes no network calls except GET /v1/models on loopback. Re-tested: 113 offline Python tests and the 2 Node desktop/reader tests, all passing; plugin preflight reports no findings.

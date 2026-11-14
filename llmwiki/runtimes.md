@@ -63,3 +63,6 @@ stores. Software presence, account access, fixture compatibility and human
 listening are different kinds of evidence. Setup stores non-secret preferences,
 not keys or a universal money meter. Require actual quota/spending enforcement
 before paid batches and explain a blocked route when that is unavailable.
+
+## FFmpeg for audiograms
+pagecast_audiogram needs the user's own ffmpeg and ffprobe on PATH, built with libass (captions), libx264 and, for the waveform, the showwaves filter. It is found with a plain PATH lookup; when missing the tool returns a plain error and writes nothing. Fonts come from fontconfig.

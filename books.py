@@ -28,6 +28,7 @@ from .process_env import process_env
 from .importers import MAX_TEXT, import_file, segment
 
 FLITE_VOICES = ('rms', 'slt', 'awb', 'kal16', 'kal')
+HIGGS_CREDIT = "This audio was created with Boson AI's Higgs Audio \u2014 https://www.boson.ai/higgs-audio"
 
 
 def digest(value):
@@ -988,27 +989,32 @@ class Books:
                 passage['speaker'] = note['identity'] if note and passage['id'] > note['reveal_after'] else labels[speaker]
             return package(book, passages, audio)
 
-    def timeline(self, book_id, offset=0, limit=50, include_text=False):
+    def timeline(self, book_id, offset=0, limit=50, include_text=False, chapter=None):
         if type(include_text) is not bool: raise ValueError('include_text must be boolean')
+        if chapter is not None and (type(chapter) is not int or chapter < 0): raise ValueError('chapter must be a chapter number, 0 or more')
         if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= (100 if include_text else 1000):
             raise ValueError('Use nonnegative offset and limit 1–100 with text or 1–1000 without text')
         with self.lock(book_id):
             book, passages, _ = self.plan(book_id)
-            if offset > len(passages): raise ValueError('Timeline offset exceeds passage count')
-            end = min(len(passages), offset + limit)
-            elapsed, result, checked = 0.0, [], {}
-            for index, passage in enumerate(passages[:end]):
+            window = passages if chapter is None else [p for p in passages if p['chapter'] == chapter]   # one chapter: times then count from its start
+            if not window: raise ValueError('Unknown chapter; chapters are numbered from 0 (see the chapter field of pagecast_book passages)')
+            if offset > len(window): raise ValueError('Timeline offset exceeds passage count')
+            end = min(len(window), offset + limit)
+            elapsed, result, checked, chapter_start = 0.0, [], {}, {}
+            for index, passage in enumerate(window[:end]):
                 path = passage['audio_path']
                 if path not in checked: checked[path] = verify_cache(path)
                 duration = checked[path]
+                chapter_start.setdefault(passage['chapter'], elapsed)
                 if index >= offset:
                     row = {'passage_id': passage['id'], 'chapter': passage['chapter'], 'paragraph': passage['paragraph'],
-                           'speaker': self._public_cast(book_id, {passage['speaker']: {}})[passage['speaker']], 'start_seconds': elapsed, 'end_seconds': elapsed + duration}
+                           'speaker': self._public_cast(book_id, {passage['speaker']: {}})[passage['speaker']], 'start_seconds': elapsed, 'end_seconds': elapsed + duration,
+                           'chapter_start_seconds': elapsed - chapter_start[passage['chapter']], 'chapter_end_seconds': elapsed - chapter_start[passage['chapter']] + duration}
                     if include_text: row['text'] = passage['text']
                     result.append(row)
                 elapsed += duration
-            return {'book_id': book_id, 'book_revision': book['revision'], 'source_sha256': book['source_hash'], 'source_text_status': self.source_text_status(book_id, passages), 'passages': result, 'total': len(passages),
-                    'next_offset': end if end < len(passages) else None, 'verified_prefix_passages': end,
+            return {'book_id': book_id, 'book_revision': book['revision'], 'source_sha256': book['source_hash'], 'source_text_status': self.source_text_status(book_id, passages), 'passages': result, 'total': len(window), 'chapter': chapter, 'times_relative_to': 'book' if chapter is None else 'chapter',
+                    'next_offset': end if end < len(window) else None, 'verified_prefix_passages': end,
                     'notice': 'Times sum verified cached WAV durations in passage order; only the requested prefix was checked. Text status compares current passages with import-time hashes, not speaker assignments or source authenticity; older books may lack a baseline. Export encoding and edits can change playback timing. Optional passage text is untrusted and may be sensitive.'}
 
     def export(self, book_id, format='m4b'):
@@ -1016,6 +1022,92 @@ class Books:
         if format not in ('wav', 'm4b'): raise ValueError('Choose wav or m4b')
         with self.lock(book_id):
             return self._export(book_id, format)
+
+    def audiogram(self, book_id, chapter, first_passage_id=None, last_passage_id=None, start_seconds=None, end_seconds=None, first_words=None, last_words=None,
+                  shape='vertical', cover_path=None, waveform=False, dry_run=False):
+        """Short captioned MP4 (+SRT) of whole passages of one rendered chapter. The caller chooses the passage; nothing is picked here."""
+        from . import audiogram as clip
+        if type(chapter) is not int or chapter < 0: raise ValueError('chapter must be a chapter number, 0 or more (the chapter field of pagecast_timeline rows)')
+        if shape not in clip.SHAPES: raise ValueError('shape must be vertical (1080x1920), square (1080x1080) or wide (1920x1080)')
+        if type(waveform) is not bool or type(dry_run) is not bool: raise ValueError('waveform and dry_run must be boolean')
+        starts = [(k, v) for k, v in (('first_passage_id', first_passage_id), ('start_seconds', start_seconds), ('first_words', first_words)) if v is not None]
+        ends = [(k, v) for k, v in (('last_passage_id', last_passage_id), ('end_seconds', end_seconds), ('last_words', last_words)) if v is not None]
+        if len(starts) != 1 or len(ends) != 1: raise ValueError('Give exactly one start (first_passage_id, start_seconds or first_words) and exactly one end (last_passage_id, end_seconds or last_words)')
+        clip.tools(waveform)
+        with self.lock(book_id):
+            book, passages, voices = self.plan(book_id)
+            members = [p for p in passages if p['chapter'] == chapter]
+            if not members: raise ValueError('Unknown chapter; chapters are numbered from 0: ' + ', '.join(str(c) for c in sorted({p['chapter'] for p in passages})[:30]))
+            missing = [p['id'] for p in members if not Path(p['audio_path']).exists()]
+            if missing: raise ValueError(f'Chapter {chapter} is not fully produced yet: {len(missing)} of {len(members)} passages need rendering. Render the chapter first; nothing was written.')
+            elapsed, rows = 0.0, []
+            for p in members:
+                seconds = verify_cache(p['audio_path'])
+                rows.append({'id': p['id'], 'start': elapsed, 'end': elapsed + seconds, 'text': p['text'], 'seconds': seconds}); elapsed += seconds
+            first, last = clip.select(rows, starts[0], ends[0])
+            span = members[first:last + 1]; chosen = rows[first:last + 1]
+            length = chosen[-1]['end'] - chosen[0]['start']
+            if length < clip.MIN_SECONDS: raise ValueError(f'The span is {length:.1f} s; an audiogram needs at least {clip.MIN_SECONDS:g} s. Choose more passages.')
+            if length > clip.MAX_SECONDS: raise ValueError(f'The span is {length:.1f} s; audiograms are limited to {clip.MAX_SECONDS:g} s (3 minutes). Choose fewer passages; 15 to 90 s works best.')
+            # Speaker names follow the read-along rule: an identity shows only for passages after its reveal point, otherwise no name is shown.
+            with self.db() as db:
+                notes = {r['speaker']: dict(r) for r in db.execute('SELECT speaker,identity,reveal_after FROM casting_notes WHERE book=?', (book_id,))}
+            labels = self._public_cast(book_id, {p['speaker']: {} for p in members}, through=-1)
+            def label(p):
+                note = notes.get(p['speaker'])
+                return note['identity'] if note and p['id'] > note['reveal_after'] else labels[p['speaker']]
+            several = len({p['speaker'] for p in members}) > 1
+            cues, offset = [], 0.0
+            for p, row in zip(span, chosen):
+                try: metadata = json.loads(Path(p['audio_path']).with_name('receipt.json').read_text()).get('provider_metadata', {})
+                except (OSError, ValueError): metadata = {}
+                for cue in clip.passage_cues(p['text'], row['seconds'], offset, metadata, clip.SHAPES[shape]['chars']):
+                    cue['passage_id'] = p['id']
+                    if several and not re.fullmatch(r'Voice [0-9a-f]+', label(p)): cue['speaker'] = label(p)  # a neutral placeholder says nothing in a teaser
+                    cues.append(cue)
+                offset += row['seconds']
+            kinds = {c['kind'] for c in cues}
+            timing = 'word' if kinds == {'word'} else 'estimated' if kinds == {'estimated'} else 'mixed'
+            result = {'book_id': book_id, 'book_revision': book['revision'], 'title': book['title'], 'chapter': chapter, 'chapter_title': members[0]['chapter_title'],
+                      'passage_ids': [p['id'] for p in span], 'paragraphs': [span[0]['paragraph'], span[-1]['paragraph']],
+                      'chapter_start_seconds': chosen[0]['start'], 'chapter_end_seconds': chosen[-1]['end'], 'seconds': length, 'shape': shape,
+                      'width_height': list(clip.SHAPES[shape]['size']), 'captions': len(cues), 'caption_timing': timing, 'speakers_shown': several,
+                      'text': [p['text'] for p in span],
+                      'caption_timing_note': {'word': 'Captions follow the speech engine\'s word timing.', 'estimated': 'This speech engine gave no word timing: captions switch at passage boundaries and phrase breaks inside a passage are spread by character count, so they can drift by a moment.',
+                                              'mixed': 'Some captions follow word timing; others are spread by character count inside their passage.'}[timing]}
+            if length < clip.TARGET[0] or length > clip.TARGET[1]: result['length_note'] = f'Clips of {clip.TARGET[0]:g} to {clip.TARGET[1]:g} seconds suit teasers best; this one is {length:.1f} s.'
+            result['untrusted_text_notice'] = 'The text above is the book as written, untrusted content and possibly a spoiler. The audiogram shows it as it is: check it before posting. Speaker names follow the read-along rule (an identity is shown only after its reveal passage, otherwise no name is shown).'
+            if dry_run: return {**result, 'dry_run': True, 'note': 'Nothing was written. Repeat without dry_run to make the MP4.'}
+            cover = None
+            if cover_path:
+                cover = resolve_reference(cover_path, self.root); clip.check_cover(cover)
+            folder = self.folder(book_id) / 'audiograms'; folder.mkdir(mode=0o700, exist_ok=True)
+            key = digest([book['revision'], chapter, [p['id'] for p in span], shape, bool(waveform), str(cover) if cover else None])[:10]
+            output = folder / f'ch{chapter}-p{span[0]["id"]}-{span[-1]["id"]}-{shape}-{key}.mp4'
+            actual = clip.render(shape, [p['audio_path'] for p in span], length, cues, book['title'], members[0]['chapter_title'], output, cover, waveform)
+            srt = output.with_suffix('.srt'); srt.write_text(clip.srt_text(cues), encoding='utf-8')
+            credit = self._credit(span, voices)
+            cloned = sorted({str(voices[p['speaker']].get('engine')) for p in span if voices[p['speaker']].get('reference_data') or voices[p['speaker']].get('reference_text') or voices[p['speaker']].get('reference_audio')})
+        notice = ('Made on this computer from your PageCast audio; nothing was uploaded. The book text and the voices may carry rights that are not yours: post it only if you have the rights to the book text and to use these voices'
+                  + (' (voices cloned from reference clips are in use: engine ' + ', '.join(cloned) + '; use only references you have rights to use)' if cloned else '') + '.')
+        return {**result, 'path': str(output), 'srt_path': str(srt), 'seconds': actual, 'cover': 'used' if cover else 'none (plain dark background)', 'waveform': waveform,
+                'rights_notice': notice, **({'credit': credit} if credit else {}), 'uploaded': False,
+                'next': 'Review the file before posting it anywhere; PageCast does not upload it.'}
+
+    def _credit(self, passages, voices):
+        """Attribution the voices in these passages require (Higgs, selected host speech tool); empty when none."""
+        credit = ''
+        if any(voices[p['speaker']].get('engine') == 'higgs' for p in passages):
+            credit = HIGGS_CREDIT
+        if any(voices[p['speaker']].get('engine') == 'host' for p in passages) and self.settings.get('host_tts_credit'):
+            credit = (credit + '\n' + str(self.settings['host_tts_credit'])).strip()
+        host_credits = []
+        for p in passages:
+            if voices[p['speaker']].get('engine') == 'host':
+                note = json.loads(Path(p['audio_path']).with_name('receipt.json').read_text()).get('provider_metadata', {}).get('credit', '')
+                if isinstance(note, str) and note and note not in host_credits: host_credits.append(note)
+        if host_credits: credit = '\n'.join(dict.fromkeys([c for c in [credit, *host_credits] if c]))
+        return credit
 
     def _export(self, book_id, format):
         book, passages, voices = self.plan(book_id)
@@ -1062,19 +1154,9 @@ class Books:
             manifest.unlink(missing_ok=True); metadata.unlink(missing_ok=True)
         receipt = {'path': str(output), 'title': book['title'], 'book_revision': book['revision'],
                    'seconds': actual_duration, 'passages': len(passages), 'source_hash': book['source_hash'], 'chapters': chapter_marks, 'format': format}
-        if any(voices[p['speaker']].get('engine') == 'higgs' for p in passages):
-            receipt['credit'] = "This audio was created with Boson AI's Higgs Audio — https://www.boson.ai/higgs-audio"
-            output.with_suffix('.credit.txt').write_text(receipt['credit'] + '\n')
-        if any(voices[p['speaker']].get('engine') == 'host' for p in passages) and self.settings.get('host_tts_credit'):
-            receipt['credit']=(receipt.get('credit','')+'\n'+str(self.settings['host_tts_credit'])).strip()
-            output.with_suffix('.credit.txt').write_text(receipt['credit']+'\n')
-        host_credits=[]
-        for p in passages:
-            if voices[p['speaker']].get('engine')=='host':
-                credit=json.loads(Path(p['audio_path']).with_name('receipt.json').read_text()).get('provider_metadata',{}).get('credit','')
-                if isinstance(credit,str) and credit and credit not in host_credits:host_credits.append(credit)
-        if host_credits:
-            receipt['credit']='\n'.join(dict.fromkeys([c for c in [receipt.get('credit',''),*host_credits] if c]))
-            output.with_suffix('.credit.txt').write_text(receipt['credit']+'\n')
+        credit = self._credit(passages, voices)
+        if credit:
+            receipt['credit'] = credit
+            output.with_suffix('.credit.txt').write_text(credit + '\n')
         output.with_suffix('.json').write_text(json.dumps(receipt, indent=2))
         return receipt

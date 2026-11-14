@@ -11,7 +11,7 @@ casting and direction; spoiler-safe progress keeps story details private.
 **At a glance**
 
 - **Install:** `hermes plugins install flabanabba8/pagecast-director`, then `hermes plugins enable pagecast-director`.
-- **Needs:** Hermes 0.22.3 or later; FFmpeg for M4B/WAV export. Speech: built-in Flite voices, or a Higgs server already running on your computer, or your own Inworld, ElevenLabs or Gemini account (keys stored by Hermes). The Android read-along app is optional.
+- **Needs:** Hermes 0.22.3 or later; FFmpeg for M4B/WAV export and audiogram clips (the audiogram tool needs an FFmpeg with libass and libx264 and says plainly when it is missing). Speech: built-in Flite voices, or a Higgs server already running on your computer, or your own Inworld, ElevenLabs or Gemini account (keys stored by Hermes). The Android read-along app is optional.
 - **Internet:** Nothing, unless you pick a hosted voice: then passage text and voice choices go to Inworld, ElevenLabs or Google (Gemini, developer key or your own Google Cloud login) and use your credits. The Android app tools can download the app from GitHub after you approve.
 - **Limits:** Linux is the only platform checked. The ElevenLabs and Gemini routes were tested against mocks, not live. Speaker attribution is yours to assign; the parser does not guess characters.
 - **Credits:** Optional voices come from the engines you choose (Flite, Higgs TTS 3, Inworld, ElevenLabs, Google Gemini); their terms apply to what you make. Licence: GPL-3.0-or-later.
@@ -21,6 +21,8 @@ There is no web dashboard tab; `dashboard/plugin_api.py` only serves the Desktop
 The unified Desktop page includes import, passage editing, casting, voice locks,
 render progress, previews and export. Enable both the Python plugin and its
 Desktop half through Hermes's normal controls. The tools also work through chat.
+
+**New in 0.5.0:** `pagecast_audiogram` turns 5 to 180 seconds (15 to 90 suit teasers) of a produced chapter into a captioned MP4 with an SRT beside it, for promoting an audiobook. See "Audiogram clips" below. `pagecast_timeline` takes an optional `chapter` to list one chapter with chapter-relative times.
 
 **0.4.0:** the plugin asks the user which voice to use and never picks one. `pagecast_speech_setup` lists what this computer has, reads the hardware and suggests online services (Gemini 3.8 Flash TTS, Inworld, ElevenLabs, with dated free-allowance facts) and local models that fit; the saved choice is the only route used. New `system` engine for installed speech programs. See `llmwiki/speech-models.md` and VERIFICATION.md.
 
@@ -72,6 +74,23 @@ This point-in-time comparison detects current text differences; text restored
 exactly to its original value reports `unchanged`. It does not verify source authenticity,
 speaker assignments, voice selection or subsequent concurrent changes. Recheck
 the current text and any editorial review before rendering or publishing.
+
+## Audiogram clips
+
+`pagecast_audiogram` makes a short shareable video from one fully rendered chapter. You or the
+user choose the passage (the tool never picks a "best" one): list the chapter with
+`pagecast_timeline` (`chapter`, `include_text`; paged, times from the chapter start), then give one
+start (`first_passage_id`, `start_seconds` or `first_words`) and one end (`last_passage_id`,
+`end_seconds` or `last_words`). The span snaps outward to whole passages, so no word is clipped,
+and gets a short fade in and out. `dry_run` shows the exact text, passages and length without writing anything.
+
+- Picture: your own `cover_path` (JPG, PNG or WebP; PageCast keeps no cover of its own) shown over a darkened, blurred copy of itself, else a plain dark background. Shapes: `vertical` 1080x1920 (default), `square` 1080x1080, `wide` 1920x1080. H.264 yuv420p and AAC.
+- Text: book title and chapter, then timed captions. Captions follow the speech engine's word timing when the render kept it (Inworld); otherwise they switch at passage boundaries and long passages are split by character count, and the result says so. The speaker name is shown when the chapter has several voices, under the read-along rule: an identity appears only for passages after its reveal passage, otherwise no name is shown. `waveform: true` adds a waveform strip.
+- Limits: the chapter must be fully rendered; 5 seconds minimum, 3 minutes maximum. Bad ranges, missing audio or a missing FFmpeg give a plain error and write nothing.
+- Output: `audiograms/` inside the book's folder in plugin data: the MP4, an SRT with the same captions, and in the result the path, length, exact text, chapter and passage ids, and the rights notice. It runs locally: nothing is uploaded, no speech is generated and nothing is billed.
+- Rights: the audio and text may be a book you do not own the rights to, and voices may be cloned from reference clips. Post a clip only if you have the rights to the text and to use those voices; the notice is repeated in every result, with the engine credit (Higgs, selected host speech tool) when one applies.
+- Book text in the result and on screen is shown as written and may be a spoiler; check the passage before posting.
+- Fonts come from the system through fontconfig (the generic "Sans" family, with fallback for CJK and emoji where installed). Caption text goes through a subtitle file, never into an FFmpeg filter, so quotes, colons, percent signs, backslashes and non-Latin text are safe.
 
 ## Inworld
 
@@ -152,7 +171,7 @@ separate license. See [Higgs model/license](https://huggingface.co/bosonai/higgs
 
 Reads only explicitly named book/reference files plus the installed Flite binary
 for cache identity. Refuses configuration/credential directories as book sources.
-Calls local Flite, FFmpeg/ffprobe and optional mpv without shell command strings.
+Calls local Flite, FFmpeg/ffprobe and optional mpv without shell command strings. Audiograms are written only under the book's own plugin-data folder; a cover image is read only from a path you name (private configuration directories and symlinks are refused).
 Stores imported book text, cast, voice-reference paths, audio, failure receipts
 and archived takes in the active profile's `plugin-data/pagecast-director`.
 

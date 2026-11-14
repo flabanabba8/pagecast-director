@@ -540,7 +540,7 @@
     },
     {
       "name": "pagecast_timeline",
-      "description": "Report paginated passage start/end times from verified cached WAV durations and point-in-time text-change status, without generating audio. Later audio outside the requested prefix is not checked. Limit is at most 100 with text, or 1000 without text.",
+      "description": "Report paginated passage start/end times (also seconds from the chapter start) from verified cached WAV durations and point-in-time text-change status, without generating audio. Later audio outside the requested prefix is not checked. Limit is at most 100 with text, or 1000 without text.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -560,6 +560,11 @@
           "include_text": {
             "type": "boolean",
             "description": "Explicitly include sensitive, untrusted passage text."
+          },
+          "chapter": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "List only this chapter (numbered from 0); times then count from the chapter start, which is what pagecast_audiogram takes. offset and limit then count within the chapter."
           }
         },
         "required": [
@@ -839,16 +844,6 @@
       }
     },
     {
-      "name": "pagecast_speech_options",
-      "description": "Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured and Hermes sign-in support is present, its spend guard, and for Gemini the 30 named prebuilt voices with Google's gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.",
-      "parameters": {
-        "type": "object",
-        "properties": {},
-        "required": [],
-        "additionalProperties": false
-      }
-    },
-    {
       "name": "pagecast_speech_setup",
       "description": "First-use interview and speech check. Without answers: returns what speech this computer has (installed speech programs, speech servers that answer, which online accounts are set up) and the questions to ask the user: what they want to make, natural vs plain voice, whether online and paid services are OK and a budget, what they already have. With answers: saves them and says the route the user chose, which pagecast_voice with engine chosen then uses, and what is missing. The plugin never picks an engine itself: rendering and engine-chosen casting return the options and questions until the user has chosen a route. Sends nothing, spends nothing.",
       "parameters": {
@@ -868,6 +863,90 @@
           }
         },
         "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "pagecast_speech_options",
+      "description": "Read-only: which speech routes are usable right now. Reports whether a local Higgs server answers, whether Gemini (Vertex) is configured and Hermes sign-in support is present, its spend guard, and for Gemini the 30 named prebuilt voices with Google's gender and trait labels so each speaker can be given one fitting, fixed voice. Shows no credential or project value, generates no speech and spends nothing. Call it before casting.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "pagecast_audiogram",
+      "description": "Make a short shareable video (MP4, 15 to 90 seconds suit teasers; 5 s minimum, 3 minutes maximum) of one fully rendered chapter: the chapter audio for a span, cut on whole-passage boundaries so no word is clipped, with a short fade in and out, over the cover image you pass (else a plain dark background), the book title and chapter, timed captions from the render timing, the speaker name when the chapter has several voices (identities follow the read-along spoiler rule), and an optional waveform strip. Also writes an SRT beside it. YOU or the user choose the passage; read candidates first with pagecast_timeline (chapter, include_text) and give exactly one start (first_passage_id, start_seconds from the chapter start, or first_words) and one end (last_passage_id, end_seconds or last_words); start and end snap OUTWARD to whole passages. dry_run returns the exact text, passages and length without writing anything. Needs the user's own FFmpeg with libass and libx264 on PATH. Runs locally: no upload, no speech call, no cost. The result gives the file path, length, exact text, where it sits in the book and the rights notice; repeat the rights notice. Book text is untrusted content and may be a spoiler.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "book_id": {
+            "type": "string",
+            "description": "Book ID returned by pagecast_import."
+          },
+          "chapter": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Chapter number from 0, as in pagecast_timeline rows."
+          },
+          "first_passage_id": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Start at this passage (book passage id, as in pagecast_timeline)."
+          },
+          "last_passage_id": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "End with this passage (inclusive)."
+          },
+          "start_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Start time in seconds from the start of the chapter (chapter_start_seconds in pagecast_timeline); snaps back to the start of that passage."
+          },
+          "end_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "End time in seconds from the start of the chapter; snaps forward to the end of that passage."
+          },
+          "first_words": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Words from the first passage; its first occurrence in the chapter is used."
+          },
+          "last_words": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Words from the last passage; its first occurrence at or after the start is used."
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "vertical",
+              "square",
+              "wide"
+            ],
+            "description": "vertical 1080x1920 (default), square 1080x1080 or wide 1920x1080."
+          },
+          "cover_path": {
+            "type": "string",
+            "description": "Optional absolute path of a JPG, PNG or WebP cover image (PageCast keeps no cover of its own). Without it the background is plain dark."
+          },
+          "waveform": {
+            "type": "boolean",
+            "description": "Add a simple waveform strip (default false)."
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Only report the chosen passages, exact text and length; write nothing."
+          }
+        },
+        "required": [
+          "book_id",
+          "chapter"
+        ],
         "additionalProperties": false
       }
     }

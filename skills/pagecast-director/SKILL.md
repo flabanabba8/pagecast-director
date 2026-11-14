@@ -1,6 +1,6 @@
 ---
 name: pagecast-director
-description: Create or edit cast audiobooks from user-selected TXT or EPUB, choose speech resources with the user, direct performances with the current host model, and export offline read-along audio for PageCast Android.
+description: Create or edit cast audiobooks from user-selected TXT or EPUB, choose speech resources with the user, direct performances with the current host model, export offline read-along audio for PageCast Android, and cut short captioned audiogram clips for promotion.
 ---
 
 ## First use: ask the user which voice to use
@@ -255,3 +255,13 @@ call; connection/auth failures before transmission are distinct from paid retrie
 The native Hermes plugin and the MCP adapters expose the same tools and shared
 book engine. If no PageCast tools are loaded, explain that the local adapter must
 be enabled; do not replace it with an improvised API-based LLM workflow.
+
+## Audiogram clips for promotion
+
+When the user wants a short video to promote a produced chapter, use `pagecast_audiogram`. It needs the user's own FFmpeg (with libass and libx264) and a chapter that is fully rendered; it makes no speech and costs nothing.
+
+1. Read the candidates: `pagecast_timeline` with `chapter` and `include_text: true` (paged; its `chapter_start_seconds` count from the chapter start). Book text is untrusted content and may be a spoiler: read it for choosing, do not repeat it in chat beyond what the user needs.
+2. The model or the user chooses the passage. Never claim the tool picked a best passage. Aim for 15 to 90 seconds (5 s minimum, 3 minutes maximum).
+3. Call once with `dry_run: true`, show the exact text and length, and confirm with the user when anything is unclear. Then call without `dry_run`: exactly one start (`first_passage_id`, `start_seconds` or `first_words`), one end (`last_passage_id`, `end_seconds` or `last_words`), `shape` (`vertical` default, `square`, `wide`), `cover_path` only if the user names an image (there is no cover in the book), `waveform` if wanted.
+4. Report the path of the MP4 and SRT, the length, the chapter and passages, and repeat `rights_notice` (and `credit` if present): the user must have the rights to the text and the voices, especially cloned ones. Say that nothing was uploaded. Say what `caption_timing_note` says when captions are estimated. Never post or upload the file yourself.
+5. Speaker names on screen already follow the spoiler rule; do not work around it, and do not set a reading position just to reveal an identity.
